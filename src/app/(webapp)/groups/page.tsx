@@ -46,7 +46,7 @@ export default function Page() {
 						onClick={refresh}
 						disabled={refreshing}
 						aria-label="Refresh"
-						className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f4f4f4] text-lg transition hover:bg-neutral-light md:h-11 md:w-11 md:text-xl"
+						className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-comment text-lg transition hover:bg-neutral-light md:h-11 md:w-11 md:text-xl"
 					>
 						<IoReload className={refreshing ? "animate-spin" : ""} />
 					</button>

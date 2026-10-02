@@ -56,7 +56,7 @@ export default function Page() {
 						className={`shrink-0 rounded-full px-5 py-2 text-sm transition ${
 							filter === value
 								? "bg-primary text-white"
-								: "bg-[#f4f4f4] text-neutral-dark hover:bg-primary-light"
+								: "bg-neutral-comment text-neutral-dark hover:bg-primary-light"
 						}`}
 					>
 						{label}
