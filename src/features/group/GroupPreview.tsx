@@ -5,11 +5,11 @@ import { HiMiniUsers } from "react-icons/hi2";
 import { RiMoneyDollarCircleFill } from "react-icons/ri";
 import { PiWarningCircleFill } from "react-icons/pi";
 import { Button } from "../../components/ui/button";
-import { CircleGroup } from "../../lib/utils/mock-data";
+import { CircleGroup } from "../../lib/utils/circle-group";
 import MemberAvatars from "./MemberAvatars";
 import ImageUpload from "../../components/shared/ImageUpload";
 
-const BANNER_PLACEHOLDER = "/images/group-test-img.png";
+const BANNER_PLACEHOLDER = "/images/group-placeholder.png";
 
 interface GroupPreviewProps {
 	group: CircleGroup;

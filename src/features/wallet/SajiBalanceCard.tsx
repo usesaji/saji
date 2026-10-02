@@ -29,9 +29,12 @@ export default function SajiBalanceCard({
 		hidden ? "*****" : formatStroops(stroops);
 
 	return (
-		<section className="mt-4 rounded-2xl bg-[#f7f7f7] p-4 md:p-6">
+		<section className="flex h-full flex-col rounded-[20px] bg-[#f8f8f8] p-6 md:p-7">
 			<div className="flex items-center justify-between gap-3">
-				<h5 className="text-xs font-light md:text-sm">Saji Balance</h5>
+				<div>
+					<h5 className="text-base md:text-lg">Saji Balance</h5>
+					<p className="text-xs font-light">Payouts held for you in escrow</p>
+				</div>
 				{linked && assets.length > 0 && (
 					<button
 						type="button"
@@ -74,7 +77,7 @@ export default function SajiBalanceCard({
 					<div className="mt-3 space-y-4">
 						{assets.map((a) => (
 							<div key={a.asset_code}>
-								<p className="text-2xl font-medium md:text-3xl">
+								<p className="text-3xl md:text-[40px]">
 									{fmt(a.total)}{" "}
 									<span className="text-base font-light text-muted-foreground md:text-lg">
 										{a.asset_code}
@@ -112,11 +115,11 @@ export default function SajiBalanceCard({
 			    "where do I withdraw?" was genuinely nowhere. A disabled button with
 			    a reason is findable; a missing one is not. */}
 			{linked && !error && (
-				<div className="mt-5">
+				<div className="mt-auto pt-6">
 					<Button
 						href={hasWithdrawable ? pageRoutes.dashboardRoutes.WITHDRAW : undefined}
 						disabled={!hasWithdrawable}
-						className="w-full md:w-auto"
+						className="w-full"
 					>
 						Withdraw
 					</Button>

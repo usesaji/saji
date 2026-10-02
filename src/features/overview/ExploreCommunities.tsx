@@ -1,33 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import {
-	HiOutlinePlusCircle,
-	HiOutlineMagnifyingGlass,
-	HiOutlineClock,
-	HiOutlineQuestionMarkCircle,
-} from "react-icons/hi2";
+import { FiPlus } from "react-icons/fi";
+import { IoHelpCircle, IoNavigateCircle, IoWallet } from "react-icons/io5";
 import { pageRoutes } from "../../config/routes";
+import SectionHeader from "../../components/dashboard/SectionHeader";
 
 const TILES = [
 	{
 		label: "Start New Group",
-		Icon: HiOutlinePlusCircle,
+		icon: <FiPlus className="text-3xl" />,
 		href: pageRoutes.dashboardRoutes.NEW_GROUP,
 	},
 	{
 		label: "Browse Pool",
-		Icon: HiOutlineMagnifyingGlass,
+		icon: <IoNavigateCircle className="text-3xl" />,
 		href: pageRoutes.dashboardRoutes.GROUPS,
 	},
 	{
 		label: "Savings History",
-		Icon: HiOutlineClock,
+		icon: <IoWallet className="text-2xl" />,
 		href: pageRoutes.dashboardRoutes.ACTIVITY,
 	},
 	{
 		label: "How it works",
-		Icon: HiOutlineQuestionMarkCircle,
+		icon: <IoHelpCircle className="text-3xl" />,
 		href: pageRoutes.landingPage,
 	},
 ];
@@ -35,19 +32,19 @@ const TILES = [
 /** "Explore Communities" — quick action tiles at the bottom of the dashboard. */
 export default function ExploreCommunities() {
 	return (
-		<section className="mt-8">
-			<h4 className="md:text-lg">Explore Communities</h4>
-			<div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-				{TILES.map(({ label, Icon, href }) => (
+		<section>
+			<SectionHeader title="Explore Communities" />
+			<div className="mt-4 grid grid-cols-2 gap-3 md:mt-6 md:grid-cols-4 md:gap-4">
+				{TILES.map(({ label, icon, href }) => (
 					<Link
 						key={label}
 						href={href}
-						className="flex flex-col items-center gap-2 rounded-2xl bg-[#f8f8f8] px-3 py-5 text-center transition-colors hover:bg-[#f0f0f0]"
+						className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-neutral-light-active px-3 py-7 text-center transition-colors hover:border-primary hover:bg-primary-light/40 md:py-9"
 					>
-						<span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f0ecff] text-primary">
-							<Icon className="text-xl" />
+						<span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-light text-primary">
+							{icon}
 						</span>
-						<span className="text-xs font-medium">{label}</span>
+						<span className="text-sm md:text-base">{label}</span>
 					</Link>
 				))}
 			</div>

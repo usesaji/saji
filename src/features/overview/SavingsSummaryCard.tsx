@@ -3,20 +3,21 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 import Link from "next/link";
-import { IoEye, IoEyeOff } from "react-icons/io5";
-import { HiOutlinePlusSmall } from "react-icons/hi2";
-import { Button } from "../../components/ui/button";
+import { IoEyeOffOutline, IoEyeOutline } from "react-icons/io5";
+import { FiChevronDown, FiPlus } from "react-icons/fi";
+import { TbCurrencyDollar } from "react-icons/tb";
+import { SiStellar } from "react-icons/si";
 import { formatMoney } from "../../lib/utils";
 import { pageRoutes } from "../../config/routes";
 import type { DashboardData } from "../../lib/api";
 import { useTotalSavings } from "../../lib/hooks/useTotalSavings";
 import { fromStroops } from "../../lib/stroops";
+import MemberAvatars from "../group/MemberAvatars";
 
-const AVATARS = "/images/review-user-imgs.png";
+type Face = { name: string; avatar_url: string | null };
 
 /**
- * The dashboard hero: everything the user's money adds up to, plus the
- * "amount due" banner.
+ * The dashboard hero: everything the user's money adds up to.
  *
  * The headline is TOTAL WORTH — withdrawable (claimable payouts + wallet) plus
  * what is still working in circles — because that is what "what have I got"
@@ -28,21 +29,19 @@ const AVATARS = "/images/review-user-imgs.png";
  * A circle saves in exactly ONE token, so a user can hold several currencies at
  * once. Rather than stack them or convert (an exchange rate would go stale, and
  * a savings figure that moves with the market is its own problem), the card
- * shows ONE token at a time behind a toggle.
+ * shows ONE token at a time behind the asset picker.
  */
-export default function SavingsSummaryCard({ data }: { data: DashboardData }) {
+export default function SavingsSummaryCard({
+	data,
+	faces = [],
+}: {
+	data: DashboardData;
+	/** A few real people the user saves with, for the avatar stack. */
+	faces?: Face[];
+}) {
 	const [hidden, setHidden] = useState(false);
 	/** Token the user picked, or null to follow the largest holding. */
 	const [picked, setPicked] = useState<string | null>(null);
-
-	// Circle progress: a rough sense of activity — cycles paid this period across
-	// the user's circles. Falls back to 0 when there's nothing yet.
-	const paidCircles = data.circles.filter((c) => c.contributed_this_cycle).length;
-	const totalCircles = Math.max(data.circles_total, 1);
-	const progressPct = Math.min(
-		100,
-		Math.round((paidCircles / totalCircles) * 100),
-	);
 
 	const total = useTotalSavings(data);
 	const assets = total.assets;
@@ -52,163 +51,209 @@ export default function SavingsSummaryCard({ data }: { data: DashboardData }) {
 	// otherwise leave the card showing that token with a blank figure.
 	const shown =
 		assets.find((a) => a.asset_code === picked) ?? total.headline ?? null;
+	const assetCode = shown?.asset_code ?? data.asset_code;
 
 	// Distinct OTHER people, from the backend — not summed over `circles`, which
 	// is capped at 5 and would double-count anyone in two of them.
-	const totalPeople = data.people_total ?? 0;
-
+	const people = data.people_total ?? 0;
 	const due = data.quick_deposit;
 
-	const hasCircles = data.circles_total > 0;
-	// The subtitle names WHERE the money is, so the headline is never ambiguous
-	// about whether it can be spent. With nothing at all, it has to tell apart a
-	// brand-new user from one whose circles have simply completed — "start
-	// saving" would be wrong for someone who already has.
-	const subtitle = (() => {
+	// Quick Deposit goes where the money is owed: the circle page is where a
+	// contribution is signed. With nothing due, the wallet is the place to top up.
+	const depositHref = due
+		? pageRoutes.dashboardRoutes.CIRCLE(due.group_id)
+		: pageRoutes.dashboardRoutes.WALLET;
+
+	const amount = hidden
+		? "••••••"
+		: total.loading && !shown
+			? "…"
+			: formatMoney(fromStroops(shown?.total ?? 0n));
+
+	// Names WHERE the money is, so the headline is never ambiguous about whether
+	// it can be spent. With nothing at all, it has to tell apart a brand-new user
+	// from one whose circles have simply completed — "start saving" would be
+	// wrong for someone who already has.
+	const detail = (() => {
 		if (total.error) return "Couldn't reach the network to read your balance";
 		if (!total.hasAnything) {
-			return hasCircles
+			return data.circles_total > 0
 				? "All caught up — your contributions have rotated back to you"
 				: "Join or create a circle to start saving";
 		}
-		const parts: string[] = [];
-		if (total.withdrawableTotalAcrossAssets > 0n) parts.push("ready to withdraw");
-		if (total.inCirclesTotalAcrossAssets > 0n) parts.push("working in your circles");
-		return parts.join(" · ");
+		if (hidden || !shown) return null;
+		return [
+			shown.withdrawable > 0n
+				? `${formatMoney(fromStroops(shown.withdrawable), assetCode)} ready to withdraw`
+				: null,
+			shown.inCircles > 0n
+				? `${formatMoney(fromStroops(shown.inCircles), assetCode)} working in circles`
+				: null,
+		]
+			.filter(Boolean)
+			.join(" · ");
 	})();
 
+	const peopleRow = people > 0 && (
+		<div className="flex items-center gap-3">
+			<MemberAvatars
+				members={faces.slice(0, 3)}
+				total={people}
+				size="lg"
+				borderClassName="border-2 border-primary"
+				overflowClassName="bg-primary-dark text-white"
+			/>
+			<span className="text-xs md:text-base">
+				{people} {people === 1 ? "Person" : "People"}
+			</span>
+		</div>
+	);
+
+	const dueNote = due && (
+		<p className="text-[11px] text-white/80 md:text-sm">
+			{formatMoney(due.amount, due.asset_code)} due
+			{due.due_at ? ` ${dueInLabel(due.due_at)}` : ""} · {due.group_name}
+		</p>
+	);
+
 	return (
-		<div className="space-y-4">
-			<div className="rounded-[20px] bg-primary p-5 text-white md:p-6">
-				<div className="flex items-start justify-between gap-4">
-					<div className="min-w-0">
-						<p className="text-[10px] md:text-sm">Your Savings</p>
-						<div className="mt-1 flex items-center gap-2.5">
-							<h3 className="truncate text-[32px] font-medium md:text-[44px]">
-								{hidden
-									? "*******"
-									: total.loading && !shown
-										? "…"
-										: formatMoney(
-												fromStroops(shown?.total ?? 0n),
-												shown?.asset_code ?? data.asset_code,
-											)}
-							</h3>
-							<button
-								type="button"
-								onClick={() => setHidden((h) => !h)}
-								className="text-xl"
-								tabIndex={-1}
-							>
-								{hidden ? <IoEyeOff /> : <IoEye />}
-							</button>
-						</div>
+		<section className="relative overflow-hidden rounded-[20px] bg-primary px-5 pb-5 pt-6 text-white md:rounded-[30px] md:px-12 md:py-12">
+			{/* Decorative backdrop: the darker blob, and the plant on wide screens. */}
+			<img
+				src="/images/wallet-vector.svg"
+				alt=""
+				aria-hidden
+				className="pointer-events-none absolute -bottom-6 -right-6 origin-bottom-right md:bottom-0 md:right-0 md:scale-[2.4]"
+			/>
+			<img
+				src="/images/wallet-flower.svg"
+				alt=""
+				aria-hidden
+				className="pointer-events-none absolute bottom-0 right-[14%] h-36 max-md:hidden"
+			/>
 
-						{/* Where THIS token's money sits. Withdrawable and locked behave
-						    differently — one is spendable now, the other is released by the
-						    rotation — so the split stays visible rather than collapsing
-						    into the headline. */}
-						{!hidden && shown && shown.total > 0n && (
-							<p className="mt-1 text-[11px] font-light text-white/90 md:text-sm">
-								{[
-									shown.withdrawable > 0n
-										? `${formatMoney(fromStroops(shown.withdrawable), shown.asset_code)} ready`
-										: null,
-									shown.inCircles > 0n
-										? `${formatMoney(fromStroops(shown.inCircles), shown.asset_code)} in circles`
-										: null,
-								]
-									.filter(Boolean)
-									.join(" · ")}
-							</p>
-						)}
-
-						<p className="mt-1 text-[10px] font-light text-white/80 md:text-xs">
-							{subtitle}
-						</p>
-
-						{/* People the user saves with. Omitted entirely when there are
-						    none — "+0 People" beside a row of avatars reads as broken
-						    rather than as "you're saving alone". */}
-						{totalPeople > 0 && (
-							<div className="mt-2 flex items-center gap-2">
-								<div className="h-6">
-									<img src={AVATARS} alt="members" className="h-full" />
-								</div>
-								<span className="text-[10px] md:text-xs">
-									+{totalPeople} {totalPeople === 1 ? "Person" : "People"}
-								</span>
-							</div>
-						)}
+			<div className="relative flex flex-col gap-7 md:flex-row md:items-start md:justify-between">
+				<div className="min-w-0">
+					<div className="flex items-center gap-3 text-xs md:text-lg">
+						<span className="md:hidden">
+							<span className="font-medium">{assetCode}</span> · Group Savings
+						</span>
+						<span className="max-md:hidden">Total Group Savings</span>
+						<AssetPicker
+							assets={assets.map((a) => a.asset_code)}
+							value={assetCode}
+							onChange={setPicked}
+						/>
 					</div>
-					<Button
-						href={pageRoutes.dashboardRoutes.WALLET}
-						className="bg-primary-dark"
-						size="sm"
-					>
-						<span>Quick Deposit</span>
-						<HiOutlinePlusSmall className="scale-125" />
-					</Button>
+
+					<div className="mt-3 flex items-center gap-3 md:mt-4 md:gap-5">
+						<AssetIcon code={assetCode} />
+						<h2 className="truncate text-[40px] font-medium leading-none tracking-tight md:text-[72px]">
+							{amount}
+						</h2>
+						<button
+							type="button"
+							onClick={() => setHidden((h) => !h)}
+							aria-label={hidden ? "Show balance" : "Hide balance"}
+							className="shrink-0 text-2xl md:text-4xl"
+						>
+							{hidden ? <IoEyeOutline /> : <IoEyeOffOutline />}
+						</button>
+					</div>
+
+					{detail && (
+						<p className="mt-2 text-[11px] font-light text-white/85 md:mt-3 md:text-sm">
+							{detail}
+						</p>
+					)}
+
+					<div className="mt-6 max-md:hidden">{peopleRow}</div>
 				</div>
 
-				{/* Token toggle — only when there is more than one to switch between.
-				    A single chip would be decoration, and none at all is the empty
-				    state. Hidden under the privacy toggle since the chips carry
-				    balances themselves. */}
-				{!hidden && assets.length > 1 && (
-					<div className="mt-4 flex flex-wrap gap-2">
-						{assets.map((a) => {
-							const active = a.asset_code === shown?.asset_code;
-							return (
-								<button
-									key={a.asset_code}
-									type="button"
-									aria-pressed={active}
-									onClick={() => setPicked(a.asset_code)}
-									className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors md:text-xs ${
-										active
-											? "bg-white text-primary"
-											: "bg-primary-dark text-white/80 hover:text-white"
-									}`}
-								>
-									{a.asset_code}
-								</button>
-							);
-						})}
-					</div>
-				)}
+				{/* Desktop: the action sits top-right, with what is owed under it. */}
+				<div className="flex flex-col items-end gap-3 max-md:hidden">
+					<QuickDeposit href={depositHref} />
+					{dueNote}
+				</div>
 
-				{/* Circle progress */}
-				<div className="mt-6">
-					<div className="flex items-center justify-between text-[10px] md:text-xs">
-						<span>Circle Progress</span>
-						<span>{progressPct}%</span>
-					</div>
-					<div className="mt-1.5 h-1.5 rounded-full bg-primary-dark">
-						<div
-							className="h-1.5 rounded-full bg-white transition-all"
-							style={{ width: `${progressPct}%` }}
-						/>
+				{/* Mobile: one row along the bottom of the card. */}
+				<div className="space-y-3 md:hidden">
+					{dueNote}
+					<div className="flex items-center justify-between gap-3">
+						<QuickDeposit href={depositHref} />
+						{peopleRow}
+						<Link
+							href={pageRoutes.dashboardRoutes.NEW_GROUP}
+							aria-label="Create a group"
+							className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-dark text-lg"
+						>
+							<FiPlus />
+						</Link>
 					</div>
 				</div>
 			</div>
+		</section>
+	);
+}
 
-			{/* Amount-due banner (only when something is due) */}
-			{due && (
-				<Link
-					href={pageRoutes.dashboardRoutes.GROUP(String(due.group_id))}
-					className="block rounded-2xl bg-[#efeaff] px-4 py-3 md:px-6 md:py-4"
-				>
-					<p className="text-sm font-medium text-primary">
-						{Number(due.amount).toLocaleString()} {due.asset_code} due
-						{due.due_at ? ` ${dueInLabel(due.due_at)}` : ""}
-					</p>
-					<p className="text-xs font-light text-primary/70">
-						Contribute to “{due.group_name}” to stay on track this cycle.
-					</p>
-				</Link>
-			)}
-		</div>
+function QuickDeposit({ href }: { href: string }) {
+	return (
+		<Link
+			href={href}
+			className="flex shrink-0 items-center gap-2 rounded-full bg-primary-dark px-5 py-2.5 text-xs transition hover:bg-primary-dark-hover md:px-16 md:py-5 md:text-lg"
+		>
+			Quick Deposit <FiPlus className="text-sm md:text-xl" />
+		</Link>
+	);
+}
+
+/** Stablecoins get a dollar mark; XLM its own glyph. */
+function AssetIcon({ code }: { code: string }) {
+	return (
+		<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white text-xl md:hidden">
+			{code === "XLM" ? <SiStellar className="text-base" /> : <TbCurrencyDollar />}
+		</span>
+	);
+}
+
+/**
+ * Which token the card shows. A plain pill when there is only one — a dropdown
+ * with a single choice is decoration — and nothing at all when there are none.
+ */
+function AssetPicker({
+	assets,
+	value,
+	onChange,
+}: {
+	assets: string[];
+	value: string;
+	onChange: (code: string) => void;
+}) {
+	const pill =
+		"rounded-full bg-primary-dark py-1.5 text-xs font-medium text-white md:py-2 md:text-sm";
+
+	if (assets.length === 0) return null;
+
+	if (assets.length === 1) {
+		return <span className={`${pill} px-4 max-md:ml-auto`}>{assets[0]}</span>;
+	}
+
+	return (
+		<label className="relative max-md:ml-auto">
+			<span className="sr-only">Show savings in</span>
+			<select
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				className={`${pill} cursor-pointer appearance-none pl-4 pr-8 outline-none`}
+			>
+				{assets.map((code) => (
+					<option key={code} value={code} className="text-neutral-dark">
+						{code}
+					</option>
+				))}
+			</select>
+			<FiChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+		</label>
 	);
 }
 

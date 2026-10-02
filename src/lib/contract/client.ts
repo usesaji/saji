@@ -23,6 +23,7 @@ import {
 	SAVINGS_CONTRACT_ID,
 	SOROBAN_RPC_URL,
 } from "../stellar-network";
+import { USE_MOCKS, mockContractClient } from "@/mocks/enabled";
 
 export { NETWORK_PASSPHRASE };
 
@@ -33,6 +34,8 @@ export { PayoutOrder, LatePenalty };
  * calls will prompt that wallet to sign.
  */
 export function savingsClient(publicKey: string): Client {
+	if (USE_MOCKS) return mockContractClient("savings", publicKey) as Client;
+
 	return new Client({
 		contractId: SAVINGS_CONTRACT_ID,
 		networkPassphrase: NETWORK_PASSPHRASE,
@@ -55,6 +58,8 @@ export function savingsClient(publicKey: string): Client {
  * CHALLENGE_CONTRACT_ID for why the two must never share a token balance.
  */
 export function challengeClient(publicKey: string): ChallengeClient {
+	if (USE_MOCKS) return mockContractClient("challenge", publicKey) as ChallengeClient;
+
 	return new ChallengeClient({
 		contractId: CHALLENGE_CONTRACT_ID,
 		networkPassphrase: NETWORK_PASSPHRASE,

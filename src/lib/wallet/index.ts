@@ -114,6 +114,7 @@ async function ensureInit(): Promise<void> {
  * The modal handles wallet selection + connection in one step.
  */
 export async function connectWallet(): Promise<string> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.connect();
 	await ensureInit();
 	const { address } = await StellarWalletsKit.authModal();
 	return address;
@@ -121,6 +122,7 @@ export async function connectWallet(): Promise<string> {
 
 /** The currently connected address, or null if none. */
 export async function currentAddress(): Promise<string | null> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.currentAddress();
 	await ensureInit();
 	try {
 		const { address } = await StellarWalletsKit.getAddress();
@@ -132,6 +134,7 @@ export async function currentAddress(): Promise<string | null> {
 
 /** Disconnect the active wallet. */
 export async function disconnectWallet(): Promise<void> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.disconnect();
 	await ensureInit();
 	try {
 		await StellarWalletsKit.disconnect();
@@ -145,6 +148,7 @@ export async function disconnectWallet(): Promise<void> {
  * signed envelope XDR (base64). The caller posts this back to a submit endpoint.
  */
 export async function signXdr(unsignedXdr: string): Promise<string> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.sign(unsignedXdr);
 	await ensureInit();
 	const { signedTxXdr } = await StellarWalletsKit.signTransaction(unsignedXdr, {
 		networkPassphrase: NETWORK_PASSPHRASE,
@@ -165,6 +169,7 @@ export type WalletBalances = Record<string, number>;
  * Returns {} if the account isn't found/funded.
  */
 export async function walletBalances(address: string): Promise<WalletBalances> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.balances(address);
 	try {
 		const res = await fetch(`${HORIZON_URL}/accounts/${address}`);
 		if (!res.ok) return {};
@@ -255,6 +260,8 @@ export async function hasTrustline(
 	code: string,
 	issuer: string,
 ): Promise<boolean> {
+	// Mock wallets hold every trustline, which also makes addTrustline a no-op.
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") return (await import("@/mocks/chain")).wallet.hasTrustline();
 	const res = await fetch(`${HORIZON_URL}/accounts/${address}`);
 	// An account that does not exist holds no trustlines. That is a real answer
 	// from the network, not a failed read.

@@ -15,7 +15,10 @@ export default function Layout({
 				<div className="lg:flex-4/12 max-w-65 xl:max-w-70">
 					<Navbar />
 				</div>
-				<div className="lg:flex-9/12">
+				{/* min-w-0: a flex item otherwise grows to its widest child, so any
+				    horizontal scroller (e.g. a card carousel) would push the whole
+				    column — header included — past the edge of the screen. */}
+				<div className="lg:flex-9/12 min-w-0">
 					<Header />
 					<div className="pt-24 md:pt-26 lg:pt-5 lg:max-h-screen overflow-y-auto hide-scroll bg-white dashboard-custom-container ">
 						<div className="min-h-screen pb-32 lg:pb-60">{children}</div>

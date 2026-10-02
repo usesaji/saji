@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,8 +9,7 @@ import NotificationBell from "../../features/notifications/NotificationBell";
 import { CiSearch } from "react-icons/ci";
 import { useApi } from "../../lib/hooks/useApi";
 import { profile as profileApi, assetUrl } from "../../lib/api";
-
-const AVATAR_PLACEHOLDER = "/images/user.jpg";
+import Avatar from "../shared/Avatar";
 
 function greeting(): string {
 	const h = new Date().getHours();
@@ -28,7 +26,6 @@ export default function Header() {
 	const [query, setQuery] = useState("");
 
 	const firstName = data?.name?.split(" ")[0] ?? "";
-	const avatar = assetUrl(data?.avatar_url, AVATAR_PLACEHOLDER);
 
 	const onSearch = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -72,14 +69,14 @@ export default function Header() {
 					<NotificationBell />
 					<Link
 						href={pageRoutes.dashboardRoutes.ME}
-						className="h-10.75 w-10.75 rounded-full overflow-hidden bg-primary items-center justify-center"
+						aria-label="Your profile"
+						className="rounded-full"
 					>
-						<Image
-							className="h-full w-full object-cover"
-							height={100}
-							width={100}
-							src={avatar}
-							alt={data?.name ?? "User Profile Picture"}
+						<Avatar
+							src={assetUrl(data?.avatar_url)}
+							name={data?.name}
+							className="h-10.75 w-10.75"
+							textClassName="text-sm"
 						/>
 					</Link>
 				</div>

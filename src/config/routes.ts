@@ -18,6 +18,17 @@ export const pageRoutes = {
 		PAYOUT_ORDER: (id: string | number) => `/groups/${id}/payout-order`,
 		GROUP_COMPLETE: (id: string | number) => `/groups/${id}/complete`,
 		JOIN_GROUP: (token: string) => `/groups/join/${token}`,
+		PROPOSALS: (id: string | number) => `/groups/${id}/proposals`,
+		NEW_PROPOSAL: (id: string | number) => `/groups/${id}/proposals/new`,
+		PROPOSAL: (id: string | number, proposalId: string | number) =>
+			`/groups/${id}/proposals/${proposalId}`,
+		VOTE: (id: string | number, proposalId: string | number) =>
+			`/groups/${id}/proposals/${proposalId}/vote`,
+		RECOVERY: (id: string | number) => `/groups/${id}/recovery`,
+		RECOVERY_OPTIONS: (id: string | number) => `/groups/${id}/recovery/options`,
+		RECOVERY_PROPOSE: (id: string | number, option: string) =>
+			`/groups/${id}/recovery/propose?option=${option}`,
+		GROUP_HISTORY: (id: string | number) => `/groups/${id}/history`,
 
 		ACTIVITY: "/activity",
 		NOTIFICATIONS: "/activity",

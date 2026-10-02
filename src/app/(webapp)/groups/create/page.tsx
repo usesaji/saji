@@ -1,14 +1,7 @@
 import React from "react";
 import CreateGroupForm from "../../../../features/group/CreateGroupForm";
-import GoBack from "../../../../components/dashboard/GoBack";
 
+// The wizard has its own back arrow in its step header.
 export default function Page() {
-	return (
-		<div>
-			<GoBack />
-			<div className="mt-4">
-				<CreateGroupForm />
-			</div>
-		</div>
-	);
+	return <CreateGroupForm />;
 }

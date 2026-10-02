@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "../ui/button";
 import Image from "next/image";
+import { pageRoutes } from "../../config/routes";
 
 const Cta = () => {
 	return (
@@ -17,10 +18,10 @@ const Cta = () => {
 					</div>
 
 					<div className="space-x-4 mb-12.75 lg:mb-0 md:mt-10">
-						<Button variant="default" className="">
+						<Button variant="default" className="" href={pageRoutes.authRoutes.REGISTER}>
 							Get Started
 						</Button>
-						<Button variant="dark" className="">
+						<Button variant="dark" className="" href="#faq">
 							Learn More
 						</Button>
 					</div>
@@ -29,7 +30,7 @@ const Cta = () => {
 				<div className="z-10 max-md:w-full w-1/2 place-self-end mb-[-100] lg:mb-[-300] sm:flex-1/2">
 					<Image
 						alt="Hero Image"
-						src="/images/cta-bg.svg"
+						src="/images/cta-bg.png"
 						height={1000}
 						width={1000}
 						className="h-full w-full object-contain"

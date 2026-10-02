@@ -439,7 +439,7 @@ export default function GroupPreviewPage() {
 	// resolving, show a neutral loader so the "forming" UI never flashes.
 	if (shouldRedirect) {
 		return (
-			<div className="mx-auto max-w-3xl pb-10">
+			<div className="w-full max-w-4xl pb-10">
 				<GoBack />
 				<div className="mt-6 text-center text-sm text-muted-foreground">
 					Taking you to your circle…
@@ -449,7 +449,7 @@ export default function GroupPreviewPage() {
 	}
 
 	return (
-		<div className="mx-auto max-w-3xl pb-10">
+		<div className="w-full max-w-4xl pb-10">
 			<GoBack />
 
 			{loading && (

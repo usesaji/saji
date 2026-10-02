@@ -1,42 +1,38 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback } from "react";
 import { pageRoutes } from "../../config/routes";
-import { IoIosArrowRoundForward } from "react-icons/io";
 import ActivityCard from "../activity/ActivityCard";
 import { useApi } from "../../lib/hooks/useApi";
 import { activity as activityApi } from "../../lib/api";
+import SectionHeader from "../../components/dashboard/SectionHeader";
+
+/** The two latest activity rows, as in the design; the rest is a tap away. */
+const LIMIT = 2;
 
 export default function RecentActivities() {
-	const fetcher = useCallback(() => activityApi.index({ per_page: 4 }), []);
+	const fetcher = useCallback(() => activityApi.index({ per_page: LIMIT }), []);
 	const { data, loading } = useApi(fetcher, []);
 
 	const rows = data?.data ?? [];
 
 	return (
 		<section>
-			<div className="mt-7.5 md:mt-10 flex items-center justify-between">
-				<h4 className="md:text-lg">Recent Activities</h4>
-				<Link
-					href={pageRoutes.dashboardRoutes.ACTIVITY}
-					className="flex items-center"
-				>
-					<span className="text-xs md:text-sm">View All</span>
-					<IoIosArrowRoundForward className="text-lg md:text-2xl" />
-				</Link>
-			</div>
+			<SectionHeader
+				title="Recent Activity"
+				href={pageRoutes.dashboardRoutes.ACTIVITY}
+			/>
 
 			{loading ? (
-				<p className="mt-3.75 text-sm text-muted-foreground">
-					Loading activity…
-				</p>
+				<div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2 md:gap-4">
+					{[0, 1].map((i) => (
+						<div key={i} className="h-32 animate-pulse rounded-xl bg-[#f8f8f8]" />
+					))}
+				</div>
 			) : rows.length === 0 ? (
-				<p className="mt-3.75 text-sm text-muted-foreground">
-					No activity yet.
-				</p>
+				<p className="mt-4 text-sm text-neutral-900">No activity yet.</p>
 			) : (
-				<div className="max-md:space-y-2 mt-3.75 lg:mt-6 md:grid md:grid-cols-2 md:gap-3.75">
+				<div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2 md:gap-4">
 					{rows.map((row) => (
 						<ActivityCard key={row.id} activity={row} />
 					))}

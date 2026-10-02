@@ -20,6 +20,7 @@ import {
 	toStroops,
 } from "@/server/stellar/service";
 import { percentOf } from "@/server/challenges";
+import { publicFileUrl } from "@/server/storage";
 
 /** How many recent on-chain events the cycle-activity list shows. */
 const ACTIVITY_LIMIT = 20;
@@ -92,7 +93,7 @@ export async function GET(
 				prisma.groupMember.findMany({
 					where: { groupId: group.id, status: { in: ["approved", "removed"] } },
 					include: {
-						user: { select: { id: true, name: true, stellarAddress: true } },
+						user: { select: { id: true, name: true, stellarAddress: true, avatarUrl: true } },
 					},
 					orderBy: { payoutPosition: "asc" },
 				}),
@@ -223,6 +224,7 @@ export async function GET(
 				position: member.payoutPosition,
 				user_id: member.userId,
 				name: member.user.name,
+				avatar_url: publicFileUrl(member.user.avatarUrl),
 				// Your own address is always yours to see; others' are masked when
 				// the circle has privacy on.
 				stellar_address:

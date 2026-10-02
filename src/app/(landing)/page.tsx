@@ -4,7 +4,6 @@ import Faq from "../../components/landing/Faq";
 import Footer from "../../components/landing/Footer";
 import Header from "../../components/landing/Header";
 import Hero from "../../components/landing/Hero";
-import Reviews from "../../components/landing/Reviews";
 
 export default function Home() {
 	return (
@@ -13,7 +12,6 @@ export default function Home() {
 			<Hero />
 			<About />
 			<Faq />
-			<Reviews />
 			<Cta />
 			<Footer />
 		</div>

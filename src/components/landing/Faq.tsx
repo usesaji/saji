@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { FiPlus } from "react-icons/fi";
+import { pageRoutes } from "../../config/routes";
 // import { FiMinus } from "react-icons/fi";
 
 const faqs = [
@@ -84,7 +85,7 @@ const Faq = () => {
 	};
 
 	return (
-		<section className="pt-18.5 pb-12 lg:pt-29 lg:pb-16">
+		<section id="faq" className="scroll-mt-28 pt-18.5 pb-12 lg:pt-29 lg:pb-16">
 			<div className="custom-container flex flex-col gap-6.5 md:justify-between md:gap-10 md:flex-row lg:gap-20">
 				<div className="sm:flex-1/2">
 					<h2 className="text-[42px] leading-[99%] lg:text-[52px]">
@@ -96,7 +97,7 @@ const Faq = () => {
 						saves community-first, transparent, and fraud-proof.
 					</p>
 
-					<Button>Get Started</Button>
+					<Button href={pageRoutes.authRoutes.REGISTER}>Get Started</Button>
 				</div>
 
 				<div className="flex-1/2 ">

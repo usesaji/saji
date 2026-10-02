@@ -1,21 +1,19 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useCallback } from "react";
 import { useParams } from "next/navigation";
 import { LuTarget } from "react-icons/lu";
 import GoBack from "@/components/dashboard/GoBack";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/lib/hooks/useApi";
-import { groups as groupsApi } from "@/lib/api";
+import { assetUrl, groups as groupsApi } from "@/lib/api";
+import MemberAvatars from "@/features/group/MemberAvatars";
 import { pageRoutes } from "@/config/routes";
-
-const AVATARS = "/images/review-user-imgs.png";
 
 /**
  * Group Completion — the celebratory "Cycle Completed!" screen shown after a
- * payout rotation completes. Surfaces the total saved and reward points, with a
- * nudge to keep going.
+ * payout rotation completes. Surfaces the total saved and the user's own
+ * contributions, with a nudge to keep going.
  */
 export default function GroupCompletePage() {
 	const { groupId } = useParams<{ groupId: string }>();
@@ -28,8 +26,13 @@ export default function GroupCompletePage() {
 	const totalSaved = data
 		? `${Number(data.total_deposited).toLocaleString()} ${data.group.asset_code}`
 		: "—";
-	// Simple points model: 1 point per unit contributed this rotation.
-	const points = data ? Math.round(Number(data.user_progress.paid)) : 0;
+	const yourContributions = data
+		? `${Number(data.user_progress.paid).toLocaleString()} ${data.group.asset_code}`
+		: "—";
+	const members = (data?.payout_rotation ?? []).map((m) => ({
+		name: m.name ?? "Member",
+		avatar_url: assetUrl(m.avatar_url) || null,
+	}));
 
 	return (
 		<div className="mx-auto max-w-lg pb-10">
@@ -52,8 +55,8 @@ export default function GroupCompletePage() {
 						<p className="mt-1 text-2xl font-medium">{totalSaved}</p>
 					</div>
 					<div className="rounded-2xl bg-[#efeaff] p-4 text-primary">
-						<p className="text-xs font-light">Your Points Earned</p>
-						<p className="mt-1 text-2xl font-medium">+{points} pts</p>
+						<p className="text-xs font-light">Your Contributions</p>
+						<p className="mt-1 text-2xl font-medium">{yourContributions}</p>
 					</div>
 				</div>
 
@@ -63,9 +66,11 @@ export default function GroupCompletePage() {
 					<p className="text-xs font-light text-muted-foreground">
 						Join or start another circle and keep growing together.
 					</p>
-					<div className="mt-3 h-8">
-						<img src={AVATARS} alt="" className="h-full" />
-					</div>
+					{members.length > 0 && (
+						<div className="mt-3">
+							<MemberAvatars members={members.slice(0, 4)} total={members.length} />
+						</div>
+					)}
 				</div>
 
 				{/* This is the moment the user is thinking about their money, so

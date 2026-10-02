@@ -7,8 +7,10 @@ import { ResponsiveModal, ResponsiveModalTitle } from "../../components/ui/respo
 export interface EditingField {
 	key: string;
 	label: string;
+	/** An input type, or "select" to choose from `options`. */
 	inputType: string;
 	value: string;
+	options?: { value: string; label: string }[];
 }
 
 interface EditFieldSheetProps {
@@ -73,14 +75,38 @@ function EditFieldForm({
 				{field.label}
 			</ResponsiveModalTitle>
 
-			<InputField
-				name={field.key}
-				type={field.inputType}
-				value={value}
-				onChange={(e) => setValue(e.target.value)}
-				error={error}
-			/>
-			{error && <p className="text-xs text-accent mt-1.5">{error}</p>}
+			{field.inputType === "select" && field.options ? (
+				<>
+					<select
+						name={field.key}
+						value={value}
+						onChange={(e) => setValue(e.target.value)}
+						aria-label={field.label}
+						className="h-12 w-full rounded-full border border-neutral-light-hover bg-white px-5 text-base outline-none focus:border-primary"
+					>
+						<option value="">Not set</option>
+						{field.options.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.label}
+							</option>
+						))}
+					</select>
+					{error && (
+						<p className="mt-1.5 text-xs text-error-500" role="alert">
+							{error}
+						</p>
+					)}
+				</>
+			) : (
+				// InputField renders the error message itself.
+				<InputField
+					name={field.key}
+					type={field.inputType}
+					value={value}
+					onChange={(e) => setValue(e.target.value)}
+					error={error}
+				/>
+			)}
 
 			<div className="flex items-center gap-3 mt-6 w-full">
 				<button

@@ -1,136 +1,132 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useCallback, useState } from "react";
-import Link from "next/link";
-import { IoIosArrowRoundForward } from "react-icons/io";
-import { Button } from "../../components/ui/button";
-import { useApi } from "../../lib/hooks/useApi";
-import { groups as groupsApi, ApiError } from "../../lib/api";
+import { useState } from "react";
+import { ApiError, groups as groupsApi, type Group } from "../../lib/api";
 import { pageRoutes } from "../../config/routes";
 import { toast } from "../../lib/utils/toast";
+import SectionHeader from "../../components/dashboard/SectionHeader";
 
-const AVATAR = "/images/user.jpg";
+function requestedAgo(iso?: string): string {
+	if (!iso) return "Requested to join";
+	const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
+	if (hours < 1) return "Requested just now";
+	if (hours < 24) return `Requested ${hours}h ago`;
+	return `Requested ${Math.floor(hours / 24)}d ago`;
+}
 
 /**
- * Pending join-request list for the organizer — approve or decline each request.
- * Used inline on the circle view (compact, capped) and on the full Requests page.
- * Only the organizer sees actions; non-organizers see nothing.
+ * Pending join requests for the organizer — approve or decline each one. Used
+ * inline on the group page (capped) and on the full Requests page. Renders
+ * nothing for non-organizers or when nobody is waiting.
+ *
+ * Takes the group's members from the caller, which already loaded them, and
+ * reports back after a decision so the caller can refresh.
  */
 export default function PendingRequests({
 	groupId,
+	groupName,
+	members,
 	isOrganizer,
 	limit,
 	showViewAll = false,
+	onDecided,
 }: {
 	groupId: number;
+	groupName?: string;
+	members: NonNullable<Group["members"]>;
 	isOrganizer: boolean;
-	/** Cap the number shown (e.g. 2 on the circle view). */
+	/** Cap the number shown (e.g. 2 on the group page). */
 	limit?: number;
 	showViewAll?: boolean;
+	onDecided: () => void;
 }) {
-	const fetcher = useCallback(() => groupsApi.show(groupId), [groupId]);
-	const { data, refetch } = useApi(fetcher, [groupId]);
 	const [busy, setBusy] = useState<number | null>(null);
 
-	const pending = (data?.members ?? []).filter((m) => m.status === "pending");
+	const pending = members.filter((m) => m.status === "pending");
 	const shown = limit ? pending.slice(0, limit) : pending;
 
-	// Only the organizer can act, and only if there's anything pending.
 	if (!isOrganizer || pending.length === 0) return null;
 
-	const act = async (
-		memberId: number,
-		fn: () => Promise<unknown>,
-		okMsg: string,
-	) => {
+	const decide = async (memberId: number, name: string, approve: boolean) => {
 		setBusy(memberId);
+		const where = groupName ? ` ${groupName}` : " the group";
 		try {
-			await fn();
-			toast.success(okMsg, "Done");
-			refetch();
+			if (approve) {
+				await groupsApi.approve(groupId, memberId);
+				toast.success(`${name} has been accepted into${where}.`, "Member Accepted");
+			} else {
+				await groupsApi.decline(groupId, memberId);
+				toast.error(`${name}'s request to join${where} was declined.`, "Request Rejected");
+			}
+			onDecided();
 		} catch (err) {
-			toast.error(
-				err instanceof ApiError ? err.message : "Something went wrong.",
-				"Failed",
-			);
+			toast.error(err instanceof ApiError ? err.message : "Something went wrong.", "Failed");
 		} finally {
 			setBusy(null);
 		}
 	};
 
 	return (
-		<section className="mt-8">
-			<div className="flex items-center justify-between">
-				<h4 className="flex items-center gap-2 md:text-lg">
-					Pending Requests
-					<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-error-500 px-1 text-[10px] text-white">
-						{pending.length}
+		<section>
+			<SectionHeader
+				title={
+					<span className="flex items-center gap-2 text-base md:text-lg">
+						Pending Requests
+						<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-error-400 px-1 text-[10px] text-white">
+							{pending.length}
+						</span>
 					</span>
-				</h4>
-				{showViewAll && pending.length > (limit ?? 0) && (
-					<Link
-						href={pageRoutes.dashboardRoutes.GROUP_REQUESTS(groupId)}
-						className="flex items-center text-xs md:text-sm"
-					>
-						View All <IoIosArrowRoundForward className="text-lg md:text-2xl" />
-					</Link>
-				)}
-			</div>
+				}
+				href={
+					showViewAll && pending.length > (limit ?? 0)
+						? pageRoutes.dashboardRoutes.GROUP_REQUESTS(groupId)
+						: undefined
+				}
+			/>
 
-			<div className="mt-4 space-y-2">
-				{shown.map((m) => (
-					<div
-						key={m.id}
-						className="flex items-center justify-between gap-3 rounded-xl bg-[#f8f8f8] px-3 py-2.5"
-					>
-						<div className="flex min-w-0 items-center gap-2">
-							<div className="h-9 w-9 shrink-0 overflow-hidden rounded-full">
-								<img
-									src={AVATAR}
-									alt={m.user?.name ?? "member"}
-									className="h-full w-full object-cover"
-								/>
+			<ul className="mt-3 space-y-3">
+				{shown.map((m) => {
+					const name = m.user?.name ?? "Member";
+					return (
+						<li key={m.id} className="flex items-center justify-between gap-3">
+							<div className="flex min-w-0 items-center gap-3">
+								<div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-primary-light">
+									{m.user?.avatar_url ? (
+										<img src={m.user.avatar_url} alt="" className="h-full w-full object-cover" />
+									) : (
+										<span className="flex h-full w-full items-center justify-center text-primary">
+											{name.charAt(0).toUpperCase()}
+										</span>
+									)}
+								</div>
+								<div className="min-w-0">
+									<p className="truncate text-sm">{name}</p>
+									<p className="text-[11px] font-light">{requestedAgo(m.created_at)}</p>
+								</div>
 							</div>
-							<div className="min-w-0">
-								<p className="truncate text-sm font-medium">
-									{m.user?.name ?? "Member"}
-								</p>
-								<p className="text-xs text-muted-foreground">Requested to join</p>
+							<div className="flex shrink-0 gap-2">
+								<button
+									type="button"
+									disabled={busy === m.id}
+									onClick={() => decide(m.id, name, false)}
+									className="rounded-full bg-accent px-4 py-2 text-xs text-white transition hover:bg-accent-hover disabled:opacity-60"
+								>
+									Decline
+								</button>
+								<button
+									type="button"
+									disabled={busy === m.id}
+									onClick={() => decide(m.id, name, true)}
+									className="rounded-full bg-primary px-4 py-2 text-xs text-white transition hover:bg-primary-hover disabled:opacity-60"
+								>
+									Approve
+								</button>
 							</div>
-						</div>
-						<div className="flex shrink-0 gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								isLoading={busy === m.id}
-								onClick={() =>
-									act(
-										m.id,
-										() => groupsApi.decline(groupId, m.id),
-										"Request declined.",
-									)
-								}
-							>
-								Decline
-							</Button>
-							<Button
-								size="sm"
-								isLoading={busy === m.id}
-								onClick={() =>
-									act(
-										m.id,
-										() => groupsApi.approve(groupId, m.id),
-										"Member approved.",
-									)
-								}
-							>
-								Approve
-							</Button>
-						</div>
-					</div>
-				))}
-			</div>
+						</li>
+					);
+				})}
+			</ul>
 		</section>
 	);
 }

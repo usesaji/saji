@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import { Button } from "../ui/button";
+import { pageRoutes } from "../../config/routes";
 
 const Stats = () => {
 	const stats = [
@@ -60,7 +61,7 @@ const About = () => {
 								payout
 							</p>
 						</div>
-						<Button variant="dark" className="mt-5">
+						<Button variant="dark" className="mt-5" href="#faq">
 							Learn More
 						</Button>
 					</div>
@@ -91,6 +92,7 @@ const About = () => {
 						<Button
 							variant="default"
 							className="sm:mt-5 mb-10 w-fit max-sm:mx-5.5 "
+							href={pageRoutes.authRoutes.REGISTER}
 						>
 							Get Started
 						</Button>
@@ -120,7 +122,7 @@ const About = () => {
 						</div>
 					</div>
 					<div className="flex items-end relative justify-between max-sm:flex-col max-sm:items-start">
-						<Button variant="default" className="sm:mt-5 mb-10 w-fit mx-5.5 ">
+						<Button variant="default" className="sm:mt-5 mb-10 w-fit mx-5.5 " href={pageRoutes.authRoutes.REGISTER}>
 							Get Started
 						</Button>
 						<div className="max-sm:mx-auto max-sm:-mb-6 max-sm:justify-self-centers lg:absolute right-0 -bottom-10 lg:right-[-10%] h-60 lg:h-50 xl:h-63.5">
@@ -147,7 +149,7 @@ const About = () => {
 								payout
 							</p>
 						</div>
-						<Button variant="dark" className="mt-5">
+						<Button variant="dark" className="mt-5" href="#faq">
 							Learn More
 						</Button>
 					</div>

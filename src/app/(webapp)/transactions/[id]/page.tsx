@@ -1,23 +1,27 @@
 "use client";
 
 import { useCallback } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import GoBack from "@/components/dashboard/GoBack";
+import { HiArrowTopRightOnSquare } from "react-icons/hi2";
+import PageHeader from "@/components/dashboard/PageHeader";
 import { useApi } from "@/lib/hooks/useApi";
 import { transactions as txApi } from "@/lib/api";
 import { labelize } from "@/features/group/group-view";
+import { formatMoney } from "@/lib/utils";
+import { pageRoutes } from "@/config/routes";
 
-const statusStyles: Record<string, string> = {
+const STATUS_STYLES: Record<string, string> = {
 	success: "bg-success-50 text-success-700",
 	pending: "bg-warning-100 text-warning-800",
 	failed: "bg-error-50 text-error-500",
 };
 
-const formatAmount = (value: string | null) =>
-	value === null ? "—" : `$${Number(value).toLocaleString(undefined, {
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	})}`;
+const STATUS_LABELS: Record<string, string> = {
+	success: "Completed",
+	pending: "Pending",
+	failed: "Failed",
+};
 
 /** Transaction Details screen for a single transaction. */
 export default function TransactionDetailPage() {
@@ -27,17 +31,27 @@ export default function TransactionDetailPage() {
 	const { data, loading, error, refetch } = useApi(fetcher, [id]);
 
 	return (
-		<div>
-			<GoBack />
+		<div className="w-full max-w-2xl space-y-6 pb-10">
+			<PageHeader
+				title={data ? labelize(data.type) : "Transaction"}
+				back
+				actions={
+					data && (
+						<span
+							className={`rounded-full px-3 py-1.5 text-xs ${
+								STATUS_STYLES[data.status] ?? STATUS_STYLES.pending
+							}`}
+						>
+							{STATUS_LABELS[data.status] ?? data.status}
+						</span>
+					)
+				}
+			/>
 
-			{loading && (
-				<p className="mt-6 text-center text-sm text-muted-foreground">
-					Loading transaction…
-				</p>
-			)}
+			{loading && <div className="h-64 animate-pulse rounded-[20px] bg-[#f8f8f8]" />}
 
 			{error && !loading && (
-				<div className="mt-6 text-center text-sm">
+				<div className="rounded-[20px] bg-[#f8f8f8] p-6 text-sm">
 					<p className="text-error-500">{error}</p>
 					<button onClick={refetch} className="mt-2 font-medium underline">
 						Try again
@@ -46,73 +60,75 @@ export default function TransactionDetailPage() {
 			)}
 
 			{data && !loading && (
-				<div className="mt-4 md:mt-6">
-					<div className="flex items-center justify-between gap-4">
-						<h2 className="text-xl md:text-3xl capitalize">
-							{labelize(data.type)}
-						</h2>
-						<span
-							className={`rounded-[33px] px-3 py-2 text-xs capitalize ${
-								statusStyles[data.status] ?? statusStyles.pending
-							}`}
-						>
-							{data.status}
-						</span>
-					</div>
+				<>
+					<section className="rounded-[20px] bg-primary px-6 py-7 text-white md:px-8">
+						<p className="text-xs md:text-sm">Amount</p>
+						{/* The detail payload carries no asset code, so the figure is shown
+						    plain rather than with a currency it might not be in. */}
+						<p className="mt-1 text-4xl font-medium md:text-5xl">
+							{data.amount === null ? "—" : formatMoney(data.amount)}
+						</p>
+						{data.amount === null && (
+							<p className="mt-2 text-xs font-light text-white/80">
+								This action didn&apos;t move money.
+							</p>
+						)}
+					</section>
 
-					<div className="mt-5 bg-[#f7f7f7] rounded-2xl p-4 md:p-6">
-						<h5 className="text-xs font-light md:text-sm">Amount</h5>
-						<h3 className="font-medium text-3xl md:text-4xl mt-1 md:mt-2">
-							{formatAmount(data.amount)}
-						</h3>
-					</div>
-
-					<div className="mt-5 space-y-3 md:space-y-4">
+					<section className="rounded-[20px] bg-[#f8f8f8] px-6 py-2">
 						<Row label="Type" value={labelize(data.type)} />
-						<Row label="Status" value={data.status} valueClass="capitalize" />
-						<Row label="Group" value={data.group?.name ?? "—"} />
+						<Row label="Status" value={STATUS_LABELS[data.status] ?? data.status} />
+						<Row
+							label="Group"
+							value={
+								data.group ? (
+									<Link
+										href={pageRoutes.dashboardRoutes.GROUP(String(data.group.id))}
+										className="text-primary underline-offset-4 hover:underline"
+									>
+										{data.group.name}
+									</Link>
+								) : (
+									"—"
+								)
+							}
+						/>
 						<Row
 							label="Transaction No"
-							value={data.transaction_no ?? "—"}
-							valueClass="break-all text-right"
+							value={
+								data.transaction_no ? (
+									<span className="font-mono text-xs" title={data.transaction_no}>
+										{`${data.transaction_no.slice(0, 10)}…${data.transaction_no.slice(-10)}`}
+									</span>
+								) : (
+									"—"
+								)
+							}
 						/>
-						<Row
-							label="Date & Time"
-							value={new Date(data.date_time).toLocaleString()}
-						/>
-					</div>
+						<Row label="Date & Time" value={new Date(data.date_time).toLocaleString()} />
+					</section>
 
 					{data.explorer_url && (
 						<a
 							href={data.explorer_url}
 							target="_blank"
 							rel="noopener noreferrer"
-							className="mt-6 inline-block font-medium text-primary underline"
+							className="inline-flex items-center gap-2 text-sm text-primary underline-offset-4 hover:underline"
 						>
-							Verify on Stellar explorer
+							Verify on Stellar explorer <HiArrowTopRightOnSquare />
 						</a>
 					)}
-				</div>
+				</>
 			)}
 		</div>
 	);
 }
 
-function Row({
-	label,
-	value,
-	valueClass = "",
-}: {
-	label: string;
-	value: string;
-	valueClass?: string;
-}) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
 	return (
-		<div className="flex justify-between gap-4 border-b border-b-[#d9d9d9] pb-2">
-			<span className="text-sm font-light md:text-base">{label}</span>
-			<span className={`text-sm font-medium md:text-base ${valueClass}`}>
-				{value}
-			</span>
+		<div className="flex items-center justify-between gap-4 border-b border-neutral-light py-3.5 last:border-0">
+			<span className="text-sm font-light">{label}</span>
+			<span className="text-right text-sm">{value}</span>
 		</div>
 	);
 }

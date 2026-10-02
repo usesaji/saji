@@ -1,6 +1,17 @@
 allowBuilds:
+  '@prisma/engines': false
+  '@reown/appkit': false
+  '@stellar/stellar-sdk': false
+  blake-hash: false
+  bufferutil: false
+  prisma: false
+  protobufjs: false
+  secp256k1: false
   sharp: false
+  tiny-secp256k1: false
   unrs-resolver: false
+  usb: false
+  utf-8-validate: false
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import React from "react";
 import { Button } from "../ui/button";
+import { pageRoutes } from "../../config/routes";
 
 export default function Hero() {
 	return (
@@ -10,7 +11,7 @@ export default function Hero() {
 					<div className="h-11 flex items-center gap-5">
 						<Image
 							alt="Hero Image"
-							src="/images/hero-user-imgs.svg"
+							src="/images/hero-user-imgs.png"
 							height={1200}
 							width={1200}
 							className="h-full w-full object-contain"
@@ -26,7 +27,7 @@ export default function Hero() {
 						SAJI is the savings platform built for how West Africa actually
 						saves community-first, transparent...
 					</p>
-					<Button className="mt-5" variant="dark">
+					<Button className="mt-5" variant="dark" href={pageRoutes.authRoutes.REGISTER}>
 						Get Started
 					</Button>
 				</div>

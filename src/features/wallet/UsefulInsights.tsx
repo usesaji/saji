@@ -52,18 +52,18 @@ export default function UsefulInsights({ data }: { data: DashboardData }) {
 	];
 
 	return (
-		<section className="mt-8">
-			<h4 className="md:text-lg">Useful Insights</h4>
-			<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+		<section>
+			<h3 className="text-lg md:text-[26px]">Useful Insights</h3>
+			<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 md:mt-6 md:gap-4">
 				{tiles.map(({ Icon, tone, label, value }) => (
-					<div key={label} className="rounded-2xl bg-[#f8f8f8] p-4">
+					<div key={label} className="rounded-[20px] bg-[#f8f8f8] p-5 md:p-6">
 						<span
-							className={`flex h-9 w-9 items-center justify-center rounded-full bg-white ${tone}`}
+							className={`flex h-11 w-11 items-center justify-center rounded-full bg-white ${tone}`}
 						>
 							<Icon className="text-lg" />
 						</span>
-						<p className="mt-3 text-xs text-muted-foreground">{label}</p>
-						<p className="mt-0.5 text-sm font-semibold md:text-base">{value}</p>
+						<p className="mt-4 text-xs font-light md:text-sm">{label}</p>
+						<p className="mt-0.5 text-lg md:text-xl">{value}</p>
 					</div>
 				))}
 			</div>

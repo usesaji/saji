@@ -2,20 +2,19 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import { useParams, useRouter } from "next/navigation";
 import { HiArrowsUpDown, HiXMark } from "react-icons/hi2";
-import GoBack from "@/components/dashboard/GoBack";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/lib/hooks/useApi";
-import { groups as groupsApi, ApiError } from "@/lib/api";
+import { groups as groupsApi, ApiError, assetUrl } from "@/lib/api";
+import Avatar from "@/components/shared/Avatar";
 import { useSavingsContract } from "@/lib/hooks/useSavingsContract";
 import { pageRoutes } from "@/config/routes";
 import { toast } from "@/lib/utils/toast";
 import { BAD_AUTH_MESSAGE, isBadAuthError } from "@/lib/errors";
 
-const AVATAR = "/images/user.jpg";
-
-type Member = { userId: number; name: string; address: string | null };
+type Member = { userId: number; name: string; address: string | null; avatar: string };
 
 /**
  * "Who gets paid first?" — the organizer drags members into the payout order,
@@ -73,6 +72,7 @@ export default function PayoutOrderPage() {
 				userId: m.user_id,
 				name: m.user?.name ?? "Member",
 				address: m.user?.stellar_address ?? null,
+				avatar: assetUrl(m.user?.avatar_url),
 			}));
 		setOrder(approved);
 	}, [data]);
@@ -191,15 +191,12 @@ export default function PayoutOrderPage() {
 	};
 
 	return (
-		<div className="mx-auto max-w-3xl pb-10">
-			<GoBack />
-			<h2 className="mt-4 text-lg font-medium md:text-2xl">
-				Who gets paid first?
-			</h2>
-			<p className="mt-1 text-xs font-light text-muted-foreground md:text-sm">
-				Drag and drop members into the payout order. The person at the top
-				receives the first payout.
-			</p>
+		<div className="w-full max-w-4xl pb-10">
+			<PageHeader
+				title="Who gets paid first?"
+				subtitle="Drag and drop members into the payout order. The person at the top receives the first payout."
+				back
+			/>
 
 			{notOnchain.length > 0 && !loading && (
 				<div className="mt-4 rounded-xl bg-warning-100 px-4 py-3">
@@ -240,9 +237,7 @@ export default function PayoutOrderPage() {
 								}`}
 							>
 								<div className="flex min-w-0 items-center gap-2">
-									<div className="h-9 w-9 shrink-0 overflow-hidden rounded-full">
-										<img src={AVATAR} alt={m.name} className="h-full w-full object-cover" />
-									</div>
+									<Avatar src={m.avatar} name={m.name} />
 									<span className="truncate text-sm font-medium">{m.name}</span>
 								</div>
 								<span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">

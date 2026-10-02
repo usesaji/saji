@@ -1,80 +1,81 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { IoIosArrowRoundForward } from "react-icons/io";
-import { Button } from "../../components/ui/button";
 import { pageRoutes } from "../../config/routes";
-import type { DashboardCircle } from "../../lib/api";
+import type { Group } from "../../lib/api";
+import SectionHeader from "../../components/dashboard/SectionHeader";
+import { CircleCard, CircleRow } from "../group/CircleCards";
 
-const AVATARS = "/images/review-user-imgs.png";
+/** Desktop shows a 2-column grid of cards; mobile a shorter list. */
+const DESKTOP_LIMIT = 4;
+const MOBILE_LIMIT = 3;
 
 /**
- * "My Active Groups" — the user's current circles as horizontal cards, matching
- * the dashboard design (target progress, member count, View Details). Uses the
- * circles already loaded on the dashboard payload.
+ * "My Active Groups" (desktop) / "Your Circles" (mobile): the circles the user
+ * is an approved member of that are open or running.
+ *
+ * Fed from `GET /api/groups` rows rather than the dashboard's `circles`, which
+ * carry no member faces, progress or due date — everything these cards show.
  */
 export default function MyActiveGroups({
-	circles,
+	groups,
+	loading,
+	error,
 }: {
-	circles: DashboardCircle[];
+	groups: Group[];
+	loading: boolean;
+	error: string | null;
 }) {
 	return (
-		<section className="mt-8">
-			<div className="flex items-center justify-between">
-				<h4 className="md:text-lg">My Active Groups ({circles.length})</h4>
-				<Link
-					href={pageRoutes.dashboardRoutes.GROUPS}
-					className="flex items-center text-xs md:text-sm"
-				>
-					View All <IoIosArrowRoundForward className="text-lg md:text-2xl" />
-				</Link>
-			</div>
+		<section>
+			<SectionHeader
+				title={
+					<>
+						<span className="md:hidden">Your Circles</span>
+						<span className="max-md:hidden">
+							My Active Groups{groups.length > 0 ? ` (${groups.length})` : ""}
+						</span>
+					</>
+				}
+				href={pageRoutes.dashboardRoutes.GROUPS}
+			/>
 
-			{circles.length === 0 ? (
-				<p className="mt-4 text-sm text-muted-foreground">
-					You&apos;re not in any active groups yet.
-				</p>
-			) : (
-				<div className="mt-4 flex gap-4 overflow-x-auto hide-scroll pb-2">
-					{circles.map((c) => (
+			{loading ? (
+				<div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2 md:gap-4">
+					{[0, 1].map((i) => (
 						<div
-							key={c.id}
-							className="w-64 shrink-0 rounded-2xl bg-[#f8f8f8] p-4"
-						>
-							<div className="flex items-center justify-between">
-								<span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium capitalize text-primary">
-									{c.status}
-								</span>
-								<span className="text-xs text-muted-foreground">
-									{c.contributed_this_cycle ? "Paid" : "Due"}
-								</span>
-							</div>
-
-							<p className="mt-3 truncate text-sm font-medium">{c.name}</p>
-							<p className="text-xs text-muted-foreground">
-								{Number(c.contribution_amount).toLocaleString()} {c.asset_code} /
-								cycle
-							</p>
-
-							<div className="mt-4 flex items-center justify-between gap-3">
-								<div className="flex items-center gap-2">
-									<div className="h-6">
-										<img src={AVATARS} alt="members" className="h-full" />
-									</div>
-									<span className="text-xs">{c.member_count} Members</span>
-								</div>
-								<Button
-									href={pageRoutes.dashboardRoutes.GROUP(String(c.id))}
-									variant="dark"
-									size="sm"
-								>
-									View Details
-								</Button>
-							</div>
-						</div>
+							key={i}
+							className="h-24 animate-pulse rounded-xl bg-[#f8f8f8] md:h-80 md:rounded-[20px]"
+						/>
 					))}
 				</div>
+			) : error ? (
+				<p className="mt-4 text-sm text-error-500">{error}</p>
+			) : groups.length === 0 ? (
+				<div className="mt-4 rounded-xl bg-[#f8f8f8] px-5 py-6 text-sm md:mt-6 md:rounded-[20px]">
+					<p>You&apos;re not in any active groups yet.</p>
+					<Link
+						href={pageRoutes.dashboardRoutes.NEW_GROUP}
+						className="mt-2 inline-flex items-center text-primary"
+					>
+						Start a group <IoIosArrowRoundForward className="text-xl" />
+					</Link>
+				</div>
+			) : (
+				<>
+					<div className="mt-4 space-y-3 md:hidden">
+						{groups.slice(0, MOBILE_LIMIT).map((group, index) => (
+							<CircleRow key={group.id} group={group} index={index} />
+						))}
+					</div>
+
+					<div className="mt-6 grid grid-cols-2 gap-4 max-md:hidden">
+						{groups.slice(0, DESKTOP_LIMIT).map((group) => (
+							<CircleCard key={group.id} group={group} />
+						))}
+					</div>
+				</>
 			)}
 		</section>
 	);

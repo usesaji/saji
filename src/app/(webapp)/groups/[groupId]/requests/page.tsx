@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import { useParams } from "next/navigation";
-import { HiOutlineAdjustmentsHorizontal } from "react-icons/hi2";
-import GoBack from "@/components/dashboard/GoBack";
 import { useApi } from "@/lib/hooks/useApi";
 import { groups as groupsApi, auth } from "@/lib/api";
 import PendingRequests from "@/features/group/PendingRequests";
@@ -13,7 +12,7 @@ export default function GroupRequestsPage() {
 	const { groupId } = useParams<{ groupId: string }>();
 	const id = Number(groupId);
 
-	const { data: group, loading } = useApi(
+	const { data: group, loading, refetch } = useApi(
 		useCallback(() => groupsApi.show(id), [id]),
 		[id],
 	);
@@ -25,19 +24,8 @@ export default function GroupRequestsPage() {
 	).length;
 
 	return (
-		<div className="mx-auto max-w-3xl pb-10">
-			<GoBack />
-
-			<div className="mt-4 flex items-center justify-between">
-				<h2 className="text-xl font-medium md:text-2xl">Requests</h2>
-				<button
-					type="button"
-					className="flex items-center gap-1.5 rounded-full border border-neutral-light-hover px-3 py-1.5 text-sm"
-				>
-					<HiOutlineAdjustmentsHorizontal className="text-base" />
-					Filter
-				</button>
-			</div>
+		<div className="w-full max-w-4xl space-y-6 pb-10">
+			<PageHeader title="Requests" subtitle="People asking to join your circle." back />
 
 			{loading ? (
 				<p className="mt-6 text-sm text-muted-foreground">Loading requests…</p>
@@ -50,7 +38,13 @@ export default function GroupRequestsPage() {
 					No pending requests.
 				</p>
 			) : (
-				<PendingRequests groupId={id} isOrganizer={isOrganizer} />
+				<PendingRequests
+					groupId={id}
+					groupName={group?.name}
+					members={group?.members ?? []}
+					isOrganizer={isOrganizer}
+					onDecided={refetch}
+				/>
 			)}
 		</div>
 	);

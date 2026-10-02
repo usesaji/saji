@@ -12,6 +12,8 @@
  *   contributions · challenges · transactions · activity · dashboard
  */
 
+import { USE_MOCKS } from "@/mocks/enabled";
+
 // Empty string = same-origin, the default now that the API lives in this app as
 // route handlers under `src/app/api`. Set this only when the API is deployed
 // separately.
@@ -23,6 +25,13 @@
 // environment variable.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TOKEN_KEY = "saji_token";
+
+/**
+ * Mock mode starts signed in, so frontend work doesn't begin at the login
+ * screen. Logging out sets this flag so the signed-out screens stay reachable
+ * until the next login. See `src/mocks/README.md`.
+ */
+const MOCK_SIGNED_OUT_KEY = "saji_mock_signed_out";
 
 // ---- shared types ----
 
@@ -74,15 +83,23 @@ export class ApiError extends Error {
 
 export function getToken(): string | null {
 	if (typeof window === "undefined") return null;
-	return window.localStorage.getItem(TOKEN_KEY);
+	const token = window.localStorage.getItem(TOKEN_KEY);
+	if (!token && USE_MOCKS && !window.localStorage.getItem(MOCK_SIGNED_OUT_KEY)) {
+		return "mock-token";
+	}
+	return token;
 }
 
 export function setToken(token: string): void {
-	if (typeof window !== "undefined") window.localStorage.setItem(TOKEN_KEY, token);
+	if (typeof window === "undefined") return;
+	window.localStorage.setItem(TOKEN_KEY, token);
+	window.localStorage.removeItem(MOCK_SIGNED_OUT_KEY);
 }
 
 export function clearToken(): void {
-	if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
+	if (typeof window === "undefined") return;
+	window.localStorage.removeItem(TOKEN_KEY);
+	if (USE_MOCKS) window.localStorage.setItem(MOCK_SIGNED_OUT_KEY, "1");
 }
 
 // ---- core request ----
@@ -111,6 +128,17 @@ function buildQuery(query?: RequestOptions["query"]): string {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
 	const { method = "GET", body, form, auth = false, query } = options;
 
+	// Backend detached: answer from the in-memory mock store instead. Same
+	// status/body handling below, so errors surface as the same ApiError.
+	// The env check is inlined (not USE_MOCKS) wherever it guards an import():
+	// the build replaces it with a literal, so the mock modules are dropped
+	// from production bundles entirely rather than shipped as unused chunks.
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") {
+		const { mockRequest } = await import("@/mocks/api");
+		const { status, data } = await mockRequest(method, path, { query, body, form });
+		return handleResponse<T>(status, data);
+	}
+
 	const headers: Record<string, string> = { Accept: "application/json" };
 	// FormData sets its own multipart boundary — don't set Content-Type for it.
 	if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -131,16 +159,27 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 		throw new ApiError("Could not reach the server. Is the backend running?", 0);
 	}
 
-	// 204 No Content etc.
+	// 204 No Content etc. A non-JSON body (an HTML error page from a missing
+	// route or a crashed function) becomes null, so handleResponse reports the
+	// status instead of this throwing a SyntaxError.
 	const text = await res.text();
-	const data = text ? JSON.parse(text) : null;
+	let data: unknown = null;
+	if (text) {
+		try {
+			data = JSON.parse(text);
+		} catch {
+			data = null;
+		}
+	}
 
-	if (!res.ok) {
-		throw new ApiError(
-			data?.message ?? `Request failed (${res.status})`,
-			res.status,
-			data?.errors,
-		);
+	return handleResponse<T>(res.status, data);
+}
+
+/** Turn a status + parsed JSON body into the result, or throw an ApiError. */
+function handleResponse<T>(status: number, data: unknown): T {
+	if (status < 200 || status >= 300) {
+		const body = data as { message?: string; errors?: Record<string, string[]> } | null;
+		throw new ApiError(body?.message ?? `Request failed (${status})`, status, body?.errors);
 	}
 
 	return data as T;
@@ -167,7 +206,8 @@ export function assetUrl(
 	fallback = "",
 ): string {
 	if (!path) return fallback;
-	if (/^https?:\/\//i.test(path)) return path; // already absolute
+	// Already absolute — including blob:/data: URLs from a local file preview.
+	if (/^(https?:|blob:|data:)/i.test(path)) return path;
 	return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
@@ -176,6 +216,11 @@ export async function downloadFile(
 	path: string,
 	query?: RequestOptions["query"],
 ): Promise<Blob> {
+	if (process.env.NEXT_PUBLIC_USE_MOCKS === "true") {
+		const { mockDownload } = await import("@/mocks/api");
+		return mockDownload(path);
+	}
+
 	const headers: Record<string, string> = {};
 	const token = getToken();
 	if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -226,6 +271,9 @@ export const auth = {
 
 	/** Full-page URL that kicks off the Google server-side OAuth flow. */
 	googleRedirectUrl(): string {
+		// Mock mode skips Google and lands straight on the callback page, which
+		// exchanges the code through the (mocked) API as usual.
+		if (USE_MOCKS) return "/auth/google/callback?code=mock";
 		return `${API_URL}/api/auth/google/redirect`;
 	},
 
@@ -578,9 +626,36 @@ export type Group = {
 	members?: {
 		id: number;
 		user_id: number;
-		status: "pending" | "approved";
-		user?: { id: number; name: string; stellar_address: string | null } | null;
+		status: "pending" | "approved" | "removed";
+		payout_position?: number | null;
+		/** When the membership row was created — for a request, when they asked. */
+		created_at?: string;
+		user?: {
+			id: number;
+			name: string;
+			stellar_address: string | null;
+			avatar_url?: string | null;
+		} | null;
 	}[];
+};
+
+/** `GET /api/groups/{id}/dashboard` — the group's health snapshot. */
+export type GroupDashboard = {
+	group: {
+		id: number;
+		name: string;
+		status: string;
+		asset_code: string;
+		contribution_amount: string;
+		contract_address: string | null;
+	};
+	member_count: number;
+	current_cycle: number;
+	pool_balance: string;
+	next_recipient_id: number | null;
+	next_payout_at: string | null;
+	/** Confirmed contributions this cycle, out of the approved members. */
+	contribution_progress: { confirmed: number; total_members: number };
 };
 
 export type GroupMember = {
@@ -642,6 +717,7 @@ export type GroupCircle = {
 		 * circle activity. Use `current_recipient_user_id` to label the rotation.
 		 */
 		stellar_address: string | null;
+		avatar_url?: string | null;
 		has_received_payout: boolean;
 		removed?: boolean;
 	}[];
@@ -762,20 +838,8 @@ export const groups = {
 		});
 	},
 
-	/** Broadcast a wallet-signed on-chain tx for this group. */
-	submitOnchain(
-		id: number,
-		input: { signed_xdr: string; type: "create_group" | "join" | "contribution" | "payout" },
-	): Promise<Transaction> {
-		return request<Transaction>(`/api/groups/${id}/submit`, {
-			method: "POST",
-			body: input,
-			auth: true,
-		});
-	},
-
 	/** Per-group dashboard (health snapshot). */
-	dashboard(id: number): Promise<unknown> {
+	dashboard(id: number): Promise<GroupDashboard> {
 		return request(`/api/groups/${id}/dashboard`, { auth: true });
 	},
 };
@@ -1035,6 +1099,177 @@ export const notifications = {
 		| { enabled: true; token: string; user_id: string; expires_in: number }
 	> {
 		return request("/api/notifications/realtime-token", { auth: true });
+	},
+};
+
+// ================================================================
+// governance (MVP 2 — proposals, votes, defaults)
+// ================================================================
+//
+// Shape agreed in MVP2-PLAN.md. The mock layer serves it today; the real
+// routes land with the governance contract. Until then these 404 against the
+// real backend, and the screens that use them hide their governance parts.
+
+export type ProposalStatus = "voting" | "approved" | "rejected" | "executed" | "expired";
+
+export type ProposalAction = "pause" | "resume" | "payout_schedule" | "recovery";
+
+/** A missed contribution recorded on-chain. */
+export type MissedContribution = {
+	id: number;
+	group_id: number;
+	member: { id: number; name: string; avatar_url: string | null };
+	/** 0-based cycle index. */
+	cycle: number;
+	amount: string;
+	asset_code: string;
+	deadline: string;
+	recorded_at: string;
+	status: "open" | "resolved";
+	/** The recovery proposal deciding it, if one has been raised. */
+	proposal_id: number | null;
+	resolved_at: string | null;
+	/** When the held-up cycle was due to pay out. */
+	payout_due_at: string | null;
+	tx_hash: string;
+	explorer_url: string;
+};
+
+export type RecoveryOption = "extend_deadline" | "cover_from_reserve";
+
+export type Proposal = {
+	id: number;
+	group_id: number;
+	kind: "governance" | "recovery";
+	title: string;
+	description: string | null;
+	action: ProposalAction;
+	status: ProposalStatus;
+	created_by: { id: number; name: string };
+	created_at: string;
+	voting_ends_at: string;
+	executed_at: string | null;
+	approvals: number;
+	rejections: number;
+	/** Approvals needed to pass. */
+	threshold: number;
+	/** Members entitled to vote. */
+	eligible_voters: number;
+	/** Members who have voted either way. */
+	votes_cast: number;
+	/** A few voters' faces for the avatar stack. */
+	voters: { name: string; avatar_url: string | null }[];
+	my_vote: "approve" | "reject" | null;
+	/** False for a member with an open default — they can't vote on their own recovery. */
+	can_vote: boolean;
+	/** Recovery proposals only. */
+	recovery: {
+		option: RecoveryOption;
+		extension_days: number;
+		new_deadline: string;
+		default: MissedContribution;
+	} | null;
+	/** The on-chain transaction that created (and later settled) the proposal. */
+	tx_hash: string | null;
+	explorer_url: string | null;
+};
+
+export type GovernanceSummary = {
+	/** The group's governance state: running, paused by a vote, or held for recovery. */
+	status: "active" | "paused" | "recovery" | string;
+	/** Proposals still open for votes, newest first. */
+	open_proposals: Proposal[];
+	/** Every proposal ever raised in the group. */
+	proposals_total: number;
+	/** Missed contributions recorded on-chain this cycle. */
+	defaults_recorded: number;
+	/** The unresolved missed contribution holding the cycle, if any. */
+	open_default: MissedContribution | null;
+	/** Approval threshold, as a percentage of eligible voters. */
+	threshold_pct: number;
+	/** Approvals a proposal needs right now. */
+	threshold: number;
+	eligible_voters: number;
+	/** Paused or in recovery: contributions and payouts are on hold. */
+	on_hold: boolean;
+};
+
+export type GovernanceEvent = {
+	id: string;
+	kind: "governance" | "recovery";
+	type:
+		| "proposal_created"
+		| "vote_recorded"
+		| "proposal_approved"
+		| "proposal_executed"
+		| "proposal_rejected"
+		| "default_recorded";
+	title: string;
+	body: string;
+	created_at: string;
+	explorer_url: string | null;
+	proposal_id: number | null;
+};
+
+export const governance = {
+	summary(groupId: number): Promise<GovernanceSummary> {
+		return request(`/api/groups/${groupId}/governance`, { auth: true });
+	},
+
+	proposals(groupId: number): Promise<Proposal[]> {
+		return request(`/api/groups/${groupId}/proposals`, { auth: true });
+	},
+
+	proposal(groupId: number, proposalId: number): Promise<Proposal> {
+		return request(`/api/groups/${groupId}/proposals/${proposalId}`, { auth: true });
+	},
+
+	create(
+		groupId: number,
+		input: { action: Exclude<ProposalAction, "recovery">; title: string; description?: string | null },
+	): Promise<Proposal> {
+		return request(`/api/groups/${groupId}/proposals`, {
+			method: "POST",
+			body: input,
+			auth: true,
+		});
+	},
+
+	defaults(groupId: number): Promise<MissedContribution[]> {
+		return request(`/api/groups/${groupId}/defaults`, { auth: true });
+	},
+
+	/** Open a recovery vote for a missed contribution. */
+	startRecovery(
+		groupId: number,
+		input: {
+			default_id: number;
+			option: RecoveryOption;
+			extension_days?: number;
+			rationale?: string | null;
+		},
+	): Promise<Proposal> {
+		return request(`/api/groups/${groupId}/recovery`, {
+			method: "POST",
+			body: input,
+			auth: true,
+		});
+	},
+
+	history(
+		groupId: number,
+		kind?: "governance" | "recovery",
+	): Promise<{ active: Proposal[]; events: GovernanceEvent[] }> {
+		return request(`/api/groups/${groupId}/history`, { auth: true, query: { kind } });
+	},
+
+	/** Cast a vote. Final — a member votes once per proposal. */
+	vote(groupId: number, proposalId: number, choice: "approve" | "reject"): Promise<Proposal> {
+		return request(`/api/groups/${groupId}/proposals/${proposalId}/vote`, {
+			method: "POST",
+			body: { choice },
+			auth: true,
+		});
 	},
 };
 

@@ -12,7 +12,7 @@ wins and the difference is called out.
 >
 > This document was written against the **Laravel** backend, which has since
 > been **replaced by Next.js route handlers** in `src/app/api` (+ `src/server`,
-> Prisma, Postgres). `backend/` no longer runs — see `backend/RETIRED.md`.
+> Prisma, Postgres). The Laravel backend has been removed (its source is in commit `13c9231`, under `php/`); `backend/…` links below point into that commit.
 >
 > The product behaviour, the data-vs-chain split, and every flow described here
 > are still accurate; they were ported deliberately. What is NOT accurate is any

@@ -1,14 +1,11 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { IoIosArrowRoundForward } from "react-icons/io";
-import { IoEye, IoEyeOff } from "react-icons/io5";
 import { HiXMark } from "react-icons/hi2";
-import GoBack from "@/components/dashboard/GoBack";
-import { Button } from "@/components/ui/button";
+import SectionHeader from "@/components/dashboard/SectionHeader";
 import { useApi } from "@/lib/hooks/useApi";
 import {
 	groups as groupsApi,
@@ -18,6 +15,19 @@ import {
 } from "@/lib/api";
 import { pageRoutes } from "@/config/routes";
 import PendingRequests from "@/features/group/PendingRequests";
+import ProposalCard from "@/features/governance/ProposalCard";
+import { useGovernance } from "@/features/governance/hooks";
+import JoinRequestAlert from "@/features/circle/JoinRequestAlert";
+import {
+	Banner,
+	CycleActivityList,
+	DecideTogether,
+	NothingYet,
+	PayoutRotationStrip,
+	SavingsCard,
+	ThisCycleCard,
+	circleStatus,
+} from "@/features/circle/CircleSections";
 import { useSavingsContract } from "@/lib/hooks/useSavingsContract";
 import { useLiveCircle } from "@/lib/hooks/useLiveCircle";
 import { requireToken } from "@/lib/contract/tokens";
@@ -26,8 +36,6 @@ import { toast } from "@/lib/utils/toast";
 import { formatStroops, toStroopsOrZero } from "@/lib/stroops";
 import { formatCountdown } from "@/features/group/group-view";
 import { BAD_AUTH_MESSAGE, displayError, errorMessage, isBadAuthError } from "@/lib/errors";
-
-const AVATAR = "/images/user.jpg";
 
 /** Contribution frequency code → adjective for copy ("daily", "weekly", …). */
 function frequencyLabel(frequency: string | undefined): string {
@@ -63,27 +71,29 @@ export default function CircleDashboardPage() {
 	// Organizer check (for pending-request actions).
 	const { data: me } = useApi(useCallback(() => auth.me(), []), []);
 	const groupFetcher = useCallback(() => groupsApi.show(Number(groupId)), [groupId]);
-	const { data: group } = useApi(groupFetcher, [groupId]);
+	const { data: group, refetch: refetchGroup } = useApi(groupFetcher, [groupId]);
 	const isOrganizer = !!(me && group && me.id === group.organizer_id);
 
 	const [hidden, setHidden] = useState(false);
 	// Onboarding modal step: 0 = closed, 1 = "alerted 72h", 2 = "payout time".
 	// Shown ONCE per circle (persisted in localStorage), not on every visit.
 	const onboardKey = `saji:onboarded:circle:${groupId}`;
-	const [onboard, setOnboard] = useState(0);
-
-	// On mount, open the onboarding once if this circle hasn't been seen yet.
-	useEffect(() => {
-		if (typeof window === "undefined") return;
-		if (!localStorage.getItem(onboardKey)) {
-			setOnboard(1);
+	// Opens once if this circle hasn't been seen yet. Read lazily rather than in
+	// an effect; the modal only renders after the circle loads on the client.
+	const [onboard, setOnboard] = useState(() => {
+		try {
+			return typeof window !== "undefined" && !localStorage.getItem(onboardKey) ? 1 : 0;
+		} catch {
+			return 0;
 		}
-	}, [onboardKey]);
+	});
 
 	// Mark this circle's onboarding as seen so it never reopens.
 	const dismissOnboard = useCallback(() => {
-		if (typeof window !== "undefined") {
+		try {
 			localStorage.setItem(onboardKey, "1");
+		} catch {
+			/* storage off — it may show again, which is harmless */
 		}
 		setOnboard(0);
 	}, [onboardKey]);
@@ -267,15 +277,120 @@ export default function CircleDashboardPage() {
 		}
 	};
 
+	// --- governance (MVP 2) — optional: the section hides if it isn't available ---
+	const gov = useGovernance(groupId);
+	const governance = gov.data;
+	const onHold = governance?.on_hold ?? false;
+	const groupStatus = governance?.status ?? data?.group.status;
+
+	// This cycle's paid count, for "Group contributions".
+	const dashFetcher = useCallback(() => groupsApi.dashboard(Number(groupId)), [groupId]);
+	const { data: groupDash } = useApi(dashFetcher, [groupId]);
+
+	const members = group?.members ?? [];
+	const faces = members
+		.filter((m) => m.status === "approved")
+		.map((m) => ({ name: m.user?.name ?? "", avatar_url: m.user?.avatar_url ?? null }));
+	const pendingMembers = members
+		.filter((m) => m.status === "pending")
+		.map((m) => ({ id: m.id, name: m.user?.name ?? "A member" }));
+
+	const afterDecision = () => {
+		refetchGroup();
+		refetch();
+	};
+
+	// Organizer only: the invite endpoint is organizer-gated.
+	const [inviting, setInviting] = useState(false);
+	const invite = async () => {
+		setInviting(true);
+		try {
+			const link = await groupsApi.inviteLink(Number(groupId));
+			const url = link.invite_url ?? `${window.location.origin}/groups/join/${link.invite_token}`;
+			const name = data?.group.name ?? "my savings group";
+			if (typeof navigator.share === "function") {
+				try {
+					await navigator.share({ title: name, text: `Join "${name}" on Saji`, url });
+					return;
+				} catch {
+					/* dismissed — fall through to copying */
+				}
+			}
+			await navigator.clipboard.writeText(url);
+			toast.success("Paste it wherever your members are.", "Invite link copied");
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : "Could not get the invite link.", "Invite failed");
+		} finally {
+			setInviting(false);
+		}
+	};
+
+	const nextPayoutAt = group?.next_payout_at ?? null;
+	// `now` (seconds, from the round countdown) instead of Date.now() — render
+	// must stay pure.
+	const daysUntil = nextPayoutAt
+		? Math.round((new Date(nextPayoutAt).getTime() - now * 1000) / 86_400_000)
+		: null;
+	const dueIn =
+		daysUntil === null
+			? "this cycle"
+			: daysUntil <= 0
+				? "today"
+				: `in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`;
+	const amountDue = `${formatStroops(amountDueStroops)} ${assetCode}`;
+
+	const confirmedThisCycle = groupDash?.contribution_progress.confirmed ?? null;
+	// The recipient doesn't pay into their own pot, so one fewer member owes.
+	const payers = Math.max((data?.member_count ?? 1) - 1, 1);
+
+	const ownStatus = currentRecipientIsMe
+		? { value: "Your turn to collect", tone: "green" as const }
+		: paidThisCycle
+			? { value: `${amountDue} paid`, tone: "green" as const }
+			: { value: `${amountDue} due`, tone: "pink" as const };
+
+	const isActive = (live ? live.status === 2 : data?.group.status === "active") && !isCompleted;
+	const showDue = isActive && !onHold && !paidThisCycle && !currentRecipientIsMe;
+
+	const nothingYet =
+		!!data &&
+		!hasActivity &&
+		!(governance && (governance.open_proposals.length > 0 || governance.proposals_total > 0)) &&
+		!(isOrganizer && pendingMembers.length > 0);
+
+	const payLabel = paidThisCycle
+		? "Paid this cycle"
+		: onHold
+			? groupStatus === "recovery"
+				? "Paused for recovery"
+				: "Group paused"
+			: roundClosed
+				? `Opens in ${formatCountdown(opensAt! - now)}`
+				: "Pay Now";
+
 	return (
-		<div className="mx-auto max-w-3xl pb-10">
-			<GoBack />
+		<div className="w-full pb-10">
+			<PageHeader
+				title={data?.group.name ?? "Circle"}
+				back
+				backHref={pageRoutes.dashboardRoutes.GROUPS}
+				actions={
+					isOrganizer ? (
+						<Link
+							href={`${pageRoutes.dashboardRoutes.GROUP(String(groupId))}?manage=1`}
+							className="rounded-full bg-neutral-comment px-4 py-2 text-xs transition hover:bg-primary-light md:text-sm"
+						>
+							Manage
+						</Link>
+					) : undefined
+				}
+			/>
 
 			{loading && (
-				<p className="mt-6 text-sm text-muted-foreground">Loading circle…</p>
+				<div className="mt-6 h-48 animate-pulse rounded-[20px] bg-[#f8f8f8]" />
 			)}
 			{error && !loading && (
-				<div className="mt-6 text-sm">
+				<div className="mt-6 rounded-[20px] bg-[#f8f8f8] p-6 text-sm">
 					<p className="text-error-500">{error}</p>
 					<button onClick={refetch} className="mt-2 font-medium underline">
 						Try again
@@ -284,298 +399,194 @@ export default function CircleDashboardPage() {
 			)}
 
 			{data && !loading && (
-				<>
-					{/* Total Group Savings (the pool) */}
-					<div className="mt-4 rounded-[20px] bg-primary p-5 text-white md:p-6">
-						<div className="flex items-start justify-between gap-4">
-							<div className="min-w-0">
-								<p className="text-[10px] md:text-sm">Total Group Savings</p>
-								<div className="mt-1 flex items-center gap-2.5">
-									<h3 className="text-[32px] font-medium md:text-[44px]">
-										{hidden
-											? "*******"
-											: `${Number(data.total_deposited).toLocaleString()} ${data.group.asset_code}`}
-									</h3>
-									<button
-										type="button"
-										onClick={() => setHidden((h) => !h)}
-										className="text-xl"
-										tabIndex={-1}
-									>
-										{hidden ? <IoEyeOff /> : <IoEye />}
-									</button>
-								</div>
-							</div>
-							<div className="h-8 shrink-0">
-								<img src="/images/review-user-imgs.png" alt="" className="h-full" />
-							</div>
-						</div>
-						<div className="mt-6">
-							<div className="flex items-center justify-between text-[10px] md:text-xs">
-								<span>Circle Progress</span>
-								<span>{data.circle_progress.percent}%</span>
-							</div>
-							<div className="mt-1.5 h-1.5 rounded-full bg-primary-dark">
-								<div
-									className="h-1.5 rounded-full bg-white transition-all"
-									style={{ width: `${data.circle_progress.percent}%` }}
-								/>
-							</div>
-						</div>
+				<div className="mt-6 space-y-8">
+					<div className="space-y-4">
+						<SavingsCard
+							total={data.total_deposited}
+							asset={data.group.asset_code}
+							hidden={hidden}
+							onToggleHidden={() => setHidden((h) => !h)}
+							status={circleStatus(groupStatus)}
+							faces={faces}
+							memberCount={data.member_count}
+							percent={data.circle_progress.percent}
+							cycleLabel={
+								isCompleted
+									? `All ${data.circle_progress.cycles_total} cycles done`
+									: `Cycle ${Math.min(data.circle_progress.cycles_done + 1, data.circle_progress.cycles_total)} of ${data.circle_progress.cycles_total}`
+							}
+							progressLabel={
+								data.group.target_amount
+									? `${Number(data.total_deposited).toLocaleString()} / ${Number(data.group.target_amount).toLocaleString()}`
+									: null
+							}
+							nextPayout={
+								nextPayoutAt
+									? new Date(nextPayoutAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+									: null
+							}
+						/>
+
+						{/* What needs attention, most urgent first. */}
+						{governance?.open_default ? (
+							<Banner
+								tone="pink"
+								title={`${governance.open_default.member.name.split(" ")[0]} missed a contribution`}
+								href={pageRoutes.dashboardRoutes.RECOVERY(groupId)}
+								cta="View recovery"
+							>
+								This cycle is paused until members agree on a recovery action.
+							</Banner>
+						) : groupStatus === "paused" ? (
+							<Banner
+								tone="yellow"
+								title="This group is paused"
+								href={pageRoutes.dashboardRoutes.PROPOSALS(groupId)}
+								cta="Proposals"
+							>
+								Members voted to pause. Contributions and payouts restart once a resume proposal
+								passes.
+							</Banner>
+						) : currentRecipientIsMe && isActive ? (
+							<Banner tone="lilac" title="It's your turn to collect this cycle">
+								You don&apos;t pay into your own payout — the others fund it. Once they have, it
+								shows in your Saji Balance to withdraw.
+							</Banner>
+						) : showDue ? (
+							<Banner tone="lilac" title={roundClosed ? `Next round opens in ${formatCountdown(opensAt! - now)}` : `${amountDue} Due ${dueIn}`}>
+								{roundClosed
+									? "The last round has been paid out. Contributions for the next one open on schedule."
+									: `Your ${frequencyLabel(data.group.contribution_frequency)} group contribution of ${amountDue} is due ${dueIn}. Ensure you leave enough balance to avoid missed payment penalties.`}
+								{lateFeeStroops > 0n &&
+									` Includes a ${formatStroops(lateFeeStroops)} ${assetCode} late fee from a missed round.`}
+							</Banner>
+						) : null}
 					</div>
 
-					{/* Payout Rotation */}
-					<section className="mt-8">
-						<div className="flex items-center justify-between">
-							<h4 className="md:text-lg">Payout Rotation</h4>
-							<Link
-								href={pageRoutes.dashboardRoutes.PAYOUT_ORDER(groupId)}
-								className="flex items-center text-xs md:text-sm"
-							>
-								View All <IoIosArrowRoundForward className="text-lg md:text-2xl" />
-							</Link>
+					{governance && (
+						<div className="grid items-start gap-6 lg:grid-cols-2">
+							<section className="space-y-3">
+								<SectionHeader
+									title={
+										<span className="flex items-center gap-2 text-sm md:text-base">
+											Active proposal
+											{governance.open_proposals.length > 0 && (
+												<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-error-400 px-1 text-[10px] text-white">
+													{governance.open_proposals.length}
+												</span>
+											)}
+										</span>
+									}
+									action={
+										<Link href={pageRoutes.dashboardRoutes.PROPOSALS(groupId)} className="text-xs text-primary md:text-sm">
+											View proposals →
+										</Link>
+									}
+								/>
+								{governance.open_proposals[0] ? (
+									<ProposalCard proposal={governance.open_proposals[0]} groupId={groupId} showVoters />
+								) : (
+									<div className="rounded-[14px] bg-[#f8f8f8] px-5 py-6 text-center text-xs font-light">
+										Nothing is being voted on right now.
+									</div>
+								)}
+							</section>
+
+							<div className="space-y-4">
+								<ThisCycleCard
+									historyHref={pageRoutes.dashboardRoutes.GROUP_HISTORY(groupId)}
+									rows={[
+										{ label: "Your contribution", ...ownStatus },
+										{
+											label: "Group contributions",
+											value:
+												confirmedThisCycle === null ? "—" : `${confirmedThisCycle} of ${payers} paid`,
+										},
+										{
+											label: "Defaults recorded",
+											value: governance.defaults_recorded === 0 ? "None" : String(governance.defaults_recorded),
+											tone: governance.defaults_recorded === 0 ? "green" : "pink",
+										},
+									]}
+								/>
+								<DecideTogether href={pageRoutes.dashboardRoutes.PROPOSALS(groupId)} />
+							</div>
 						</div>
-						{data.payout_rotation.length === 0 ? (
-							<p className="mt-4 text-sm text-muted-foreground">
-								No rotation yet — start the cycle to set the payout order.
-							</p>
-						) : (
-							<div className="mt-4 flex gap-5 overflow-x-auto hide-scroll pb-2">
-								{data.payout_rotation.map((m) => {
-									const isCurrent =
-										!m.removed && m.position - 1 === data.current_cycle;
-									return (
-										<div
-											key={m.user_id}
-											className="flex w-16 shrink-0 flex-col items-center text-center"
-										>
-											<div
-												className={`relative h-14 w-14 overflow-hidden rounded-full bg-[#f0ecff] ${
-													m.removed ? "opacity-40 grayscale" : ""
-												}`}
-											>
-												<img
-													src={AVATAR}
-													alt={m.name ?? "member"}
-													className="h-full w-full object-cover"
-												/>
-												{isCurrent && (
-													<span className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-primary ring-2 ring-white" />
-												)}
-											</div>
-											<p
-												className={`mt-1 w-full truncate text-xs font-medium ${
-													m.removed ? "text-muted-foreground line-through" : ""
-												}`}
-											>
-												{m.name ?? "Member"}
-											</p>
-											<p className="text-[10px] text-muted-foreground">
-												{m.removed
-													? "Removed"
-													: isCurrent
-														? "Current"
-														: "Next Cycle"}
-											</p>
-										</div>
-									);
-								})}
-							</div>
-						)}
-					</section>
+					)}
 
-					{/* Cycle Activity */}
-					<section className="mt-8">
-						<h4 className="md:text-lg">Cycle Activity</h4>
-						{!hasActivity ? (
-							<div className="mt-8 flex flex-col items-center py-10 text-center text-muted-foreground">
-								<div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#f0f0f0] text-xl">
-									i
-								</div>
-								<p className="mt-3 text-sm">No Activity yet</p>
-							</div>
-						) : (
-							<ul className="mt-4 space-y-2">
-								{data.cycle_activity.map((a) => (
-									<li
-										key={a.id}
-										className="flex items-center justify-between rounded-xl bg-[#f8f8f8] px-4 py-3"
-									>
-										<div>
-											<p className="text-sm font-medium capitalize">
-												{a.type.replace("_", " ")}
-											</p>
-											<p className="text-xs text-muted-foreground">
-												{new Date(a.created_at).toLocaleString()}
-											</p>
-										</div>
-										{a.explorer_url && (
-											<a
-												href={a.explorer_url}
-												target="_blank"
-												rel="noreferrer"
-												className="text-xs text-primary underline"
-											>
-												View Transaction
-											</a>
-										)}
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
+					<PayoutRotationStrip
+						rotation={data.payout_rotation}
+						currentUserId={currentRecipient?.user_id ?? null}
+						href={pageRoutes.dashboardRoutes.PAYOUT_ORDER(groupId)}
+					/>
 
-					{/* Pending join requests (organizer only) — inline, capped, with
-					    a View All to the full Requests page. */}
 					<PendingRequests
 						groupId={Number(groupId)}
+						groupName={data.group.name}
+						members={members}
 						isOrganizer={isOrganizer}
 						limit={2}
 						showViewAll
+						onDecided={afterDecision}
 					/>
 
-					{/* How this circle works: each cycle earmarks the pool for one
-					    member. The contract is PULL-BASED — the money stays escrowed
-					    until that member claims it from their Saji Balance, so there IS
-					    a withdraw step, just not on this page. This panel makes the
-					    current state legible (whose turn, which cycle, whether you've
-					    paid). */}
-					{!isCompleted && (
-						<section className="mt-8 rounded-2xl bg-[#f7f7f7] p-4 md:p-6">
-							<div className="flex items-center justify-between">
-								<h4 className="md:text-lg">This cycle</h4>
-								<span className="text-xs text-muted-foreground">
-									Cycle {data.circle_progress.cycles_done + 1} of{" "}
-									{data.circle_progress.cycles_total}
-								</span>
-							</div>
-							{currentRecipient ? (
-								<p className="mt-2 text-sm">
-									<span className="font-medium">{currentRecipient.name ?? "A member"}</span>{" "}
-									{currentRecipientIsMe ? "(you) " : ""}receives this cycle&apos;s
-									payout once everyone has contributed.
-								</p>
-							) : (
-								<p className="mt-2 text-sm text-muted-foreground">
-									The next recipient is set by the payout order.
-								</p>
-							)}
-							<p className="mt-2 text-xs font-light text-muted-foreground">
-								When everyone has paid this cycle, the pool is earmarked for the
-								member whose turn it is. It then shows in their Saji Balance —
-								they approve one transaction to move it to their wallet.
-							</p>
-						</section>
+					{hasActivity && (
+						<CycleActivityList
+							activity={data.cycle_activity}
+							viewAllHref={pageRoutes.dashboardRoutes.ACTIVITY}
+						/>
 					)}
 
-					{/* Contribute — runs here directly (the group page redirects back
-					    to this one once the cycle is active, so a link would dead-end).
+					{nothingYet && <NothingYet />}
+
+					{/* The page's two actions, kept in reach while scrolling.
 
 					    The recipient is EXEMPT: the contract rejects a contribution
-					    from whoever is due to collect, so offering them a pay button
-					    would ask them to sign a transaction we already know reverts. */}
-					<div className="mt-6">
-						{currentRecipientIsMe ? (
-							<div className="rounded-2xl bg-[#efeaff] px-4 py-4 md:px-6">
-								<p className="text-sm font-medium md:text-base">
-									It&apos;s your turn to collect this cycle
-								</p>
-								<p className="mt-1 text-xs font-light text-neutral-dark">
-									You don&apos;t pay into your own payout — the others fund it.
-									Once everyone else has contributed, it&apos;s earmarked for
-									you and you can withdraw it from your Saji Balance.
-								</p>
-							</div>
-						) : (
-							<>
-								<Button
-									onClick={contribute}
-									isLoading={contributing}
-									disabled={paidThisCycle || roundClosed}
-									className="w-full md:w-auto"
-								>
-									{paidThisCycle
-										? "You've paid this cycle"
-										: roundClosed
-											? `Next round opens in ${formatCountdown(opensAt! - now)}`
-											: hasActivity
-												? `Pay ${formatStroops(amountDueStroops)} ${assetCode}`
-												: `Make First Payment · ${formatStroops(amountDueStroops)} ${assetCode}`}
-								</Button>
-
-								{roundClosed && !paidThisCycle && (
-									<p className="mt-2 text-xs font-light text-muted-foreground">
-										The last round has been paid out. Contributions for the next
-										one open on schedule, so the circle keeps to the frequency
-										everyone agreed to.
-									</p>
-								)}
-
-								{!paidThisCycle && lateFeeStroops > 0n && (
-									<p className="mt-2 text-xs font-medium text-error-500">
-										Includes a {formatStroops(lateFeeStroops)} {assetCode} late
-										fee from a missed round. It goes into this cycle&apos;s pot,
-										not to the organizer.
-									</p>
-								)}
-
-								{paidThisCycle && (
-									<p className="mt-2 text-xs font-light text-muted-foreground">
-										You&apos;re paid up for this cycle. Once everyone else has
-										contributed, the payout is earmarked for this cycle&apos;s
-										recipient, who claims it from their Saji Balance.
-									</p>
-								)}
-							</>
-						)}
-					</div>
-
-					{/* Organizer: a way back to the group page (invite link, member
-					    list, settings). The group page redirects here once the cycle
-					    is active, so this is the organizer's route back to it. */}
-					{isOrganizer && (
-						<div className="mt-4">
+					    from whoever is due to collect, so they get no pay button. */}
+					<div className="sticky bottom-24 z-30 flex gap-3 lg:bottom-6">
+						{isCompleted ? (
 							<Link
-								href={`${pageRoutes.dashboardRoutes.GROUP(String(groupId))}?manage=1`}
-								className="text-sm font-medium text-primary underline"
-							>
-								Manage circle & invite link
-							</Link>
-						</div>
-					)}
-
-					{/* Rotation finished → surface the celebration screen. */}
-					{isCompleted && (
-						<div className="mt-6">
-							<Button
-								variant="outline"
 								href={pageRoutes.dashboardRoutes.GROUP_COMPLETE(groupId)}
-								className="w-full md:w-auto"
+								className="flex h-12 flex-1 items-center justify-center rounded-full bg-primary text-sm text-white shadow-lg md:max-w-xs"
 							>
 								View Cycle Summary
-							</Button>
-						</div>
-					)}
-
-					{/* "Make a deposit" nudge banner (new circle, no activity). */}
-					{!hasActivity && (
-						<div className="mt-6 rounded-2xl bg-primary p-4 text-white">
-							<p className="text-sm font-medium">
-								Yooo — make a deposit, let&apos;s get started
-							</p>
-							<p className="text-xs font-light">
-								Your {frequencyLabel(data.group.contribution_frequency)}{" "}
-								contribution of{" "}
-								{Number(data.group.contribution_amount).toLocaleString()}{" "}
-								{data.group.asset_code} keeps the circle moving. Fund your wallet
-								to avoid a late penalty.
-							</p>
-						</div>
-					)}
-				</>
+							</Link>
+						) : (
+							!currentRecipientIsMe && (
+								<button
+									type="button"
+									onClick={contribute}
+									disabled={contributing || paidThisCycle || roundClosed || onHold || !isActive}
+									className="h-12 flex-1 rounded-full bg-primary text-sm text-white shadow-lg transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-neutral-light-hover disabled:text-neutral-light-active disabled:shadow-none md:max-w-xs md:text-base"
+								>
+									{contributing ? "Confirm in your wallet…" : payLabel}
+								</button>
+							)
+						)}
+						{isOrganizer && (
+							<button
+								type="button"
+								onClick={invite}
+								disabled={inviting}
+								className="h-12 flex-1 rounded-full bg-neutral-comment text-sm text-accent shadow-lg transition hover:bg-accent-light disabled:opacity-60 md:max-w-xs md:text-base"
+							>
+								Invite Members
+							</button>
+						)}
+					</div>
+				</div>
 			)}
 
-			{/* Onboarding modals — only while the circle is brand-new. */}
+			{isOrganizer && data && !loading && (
+				<JoinRequestAlert
+					groupId={Number(groupId)}
+					groupName={data.group.name}
+					pending={pendingMembers}
+					onDecided={afterDecision}
+				/>
+			)}
+
+			{/* Onboarding — only while the circle is brand-new. */}
 			{data && !loading && !hasActivity && onboard > 0 && (
 				<OnboardingModal
 					step={onboard}
@@ -588,6 +599,7 @@ export default function CircleDashboardPage() {
 	);
 }
 
+/** First-visit walkthrough for a new circle, styled like the dashboard tour. */
 function OnboardingModal({
 	step,
 	onNext,
@@ -611,24 +623,39 @@ function OnboardingModal({
 				};
 
 	return (
-		<div className="fixed inset-0 z-[1002] flex items-center justify-center bg-black/40 p-4">
-			<div className="w-full max-w-sm rounded-2xl bg-white p-5">
-				<div className="flex justify-end">
-					<button onClick={onClose} type="button" className="text-lg">
+		<div className="fixed inset-0 z-1100 flex items-center justify-center bg-black/15 px-4 backdrop-blur-md">
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="circle-onboarding-title"
+				className="w-full max-w-lg rounded-[14px] bg-white px-6 pb-6 pt-7 shadow-xl md:px-8 md:pb-8"
+			>
+				<div className="flex items-start justify-between gap-4">
+					<h3 id="circle-onboarding-title" className="text-2xl md:text-[28px]">
+						{content.title}
+					</h3>
+					<button onClick={onClose} type="button" aria-label="Close" className="text-2xl">
 						<HiXMark />
 					</button>
 				</div>
-				<h3 className="text-lg font-medium">{content.title}</h3>
-				<p className="mt-2 text-sm text-muted-foreground">{content.body}</p>
-				<div className="mt-5 flex justify-end gap-2">
+				<p className="mt-2 text-sm leading-relaxed md:text-base">{content.body}</p>
+				<div className={`mt-8 flex items-center ${step === 2 ? "justify-between" : ""}`}>
 					{step === 2 && (
-						<Button variant="outline" size="sm" onClick={onPrev}>
+						<button
+							type="button"
+							onClick={onPrev}
+							className="h-12 rounded-full bg-neutral-comment px-7 text-base transition hover:bg-neutral-light"
+						>
 							Previous
-						</Button>
+						</button>
 					)}
-					<Button size="sm" onClick={onNext}>
+					<button
+						type="button"
+						onClick={onNext}
+						className="h-12 rounded-full bg-primary px-7 text-base text-white transition hover:bg-primary-hover"
+					>
 						{step === 1 ? "Next" : "Got it"}
-					</Button>
+					</button>
 				</div>
 			</div>
 		</div>

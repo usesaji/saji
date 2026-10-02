@@ -3,6 +3,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Metadata } from "next";
 import Toast from "../components/ui/custom/Toast";
+import MockBadge from "../components/shared/MockBadge";
 import { Analytics } from "@vercel/analytics/next";
 
 const dmSans = DM_Sans({
@@ -71,10 +72,11 @@ export const metadata: Metadata = {
 			"max-image-preview": "large",
 		},
 	},
+	manifest: "/images/logos/site.webmanifest",
 	icons: {
 		icon: "/favicon.ico",
-		shortcut: "/favicon-16x16.png",
-		apple: "/apple-touch-icon.png",
+		shortcut: "/images/logos/favicon-16x16.png",
+		apple: "/images/logos/apple-touch-icon.png",
 	},
 };
 
@@ -96,6 +98,7 @@ export default function RootLayout({
 			<body className="min-h-full" suppressHydrationWarning>
 				{children}
 				<Toast />
+				<MockBadge />
 				<Analytics />
 			</body>
 		</html>

@@ -1,5 +1,5 @@
 import { assetUrl, type Group } from "@/lib/api";
-import type { CircleGroup } from "@/lib/utils/mock-data";
+import type { CircleGroup } from "@/lib/utils/circle-group";
 
 /**
  * Adapt a backend `Group` into the view shape the existing group cards/preview
@@ -14,8 +14,8 @@ import type { CircleGroup } from "@/lib/utils/mock-data";
  * is faked and nothing is left blank that the backend actually knows.
  */
 
-const PLACEHOLDER_THUMB = "/images/about/backed.svg";
-const PLACEHOLDER_BANNER = "/images/group-test-img.png";
+const PLACEHOLDER_THUMB = "/images/group-placeholder.png";
+const PLACEHOLDER_BANNER = "/images/group-placeholder.png";
 
 /**
  * Contribution frequency → cycle length in days, for the contract's

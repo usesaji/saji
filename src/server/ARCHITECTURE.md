@@ -260,7 +260,8 @@ Honest list of what is not done or not production-ready.
 `backend/` is **no longer served and no longer part of the running system.**
 Every route it exposed now lives in `src/app/api`, including the two that were
 briefly listed as unported (Google OAuth and statement export — both are done;
-statement is CSV, PDF was dropped). It is kept in the tree for reference while
-the port beds in. Nothing in it runs, and `php artisan schedule:work` is no
+statement is CSV, PDF was dropped). It has been removed from the tree; the
+original source is in commit `13c9231` (`php/`) for anyone tracing a "Ported
+from …" comment. Nothing in it ran, and `php artisan schedule:work` is no
 longer a thing anyone needs to start — the reconciler is `runIndexer`, driven by
 `after()` and Vercel Cron.

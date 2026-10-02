@@ -1,9 +1,17 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { HiChevronRight } from "react-icons/hi2";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+	HiChevronRight,
+	HiOutlineArrowRightOnRectangle,
+	HiOutlineDocumentText,
+	HiOutlineShieldCheck,
+	HiOutlineUser,
+	HiOutlineWallet,
+} from "react-icons/hi2";
 import { useApi } from "../../../lib/hooks/useApi";
 import {
 	profile as profileApi,
@@ -13,9 +21,40 @@ import {
 } from "../../../lib/api";
 import { toast } from "../../../lib/utils/toast";
 import ImageUpload from "../../../components/shared/ImageUpload";
+import { initials } from "../../../components/shared/Avatar";
+import PageHeader from "../../../components/dashboard/PageHeader";
 import { pageRoutes } from "../../../config/routes";
+import { labelize } from "../../../features/group/group-view";
 
-const AVATAR_PLACEHOLDER = "/images/user.jpg";
+/** "GABC…WXYZ" — enough to recognise an address without a wall of text. */
+const shortAddress = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)}`;
+
+const MENU = [
+	{
+		label: "Personal Info",
+		description: "Name, tag, date of birth and address",
+		href: pageRoutes.dashboardRoutes.PROFILE_PERSONAL_INFO,
+		Icon: HiOutlineUser,
+	},
+	{
+		label: "Password & Security",
+		description: "Password, login lockout and withdrawal checks",
+		href: pageRoutes.dashboardRoutes.PROFILE_SECURITY,
+		Icon: HiOutlineShieldCheck,
+	},
+	{
+		label: "Withdraw Destinations",
+		description: "Where your payouts can be sent",
+		href: pageRoutes.dashboardRoutes.WITHDRAW_INFO,
+		Icon: HiOutlineWallet,
+	},
+	{
+		label: "Generate Statement",
+		description: "Download your transaction history",
+		href: pageRoutes.dashboardRoutes.PROFILE_STATEMENT,
+		Icon: HiOutlineDocumentText,
+	},
+];
 
 export default function Page() {
 	const router = useRouter();
@@ -44,111 +83,166 @@ export default function Page() {
 		}
 	};
 
-	// Local copy of the avatar so an upload reflects immediately without refetch.
-	const [avatar, setAvatar] = useState<string | null>(null);
-	useEffect(() => {
-		if (data) setAvatar(data.avatar_url);
-	}, [data]);
+	// A just-uploaded avatar shows immediately, without waiting on a refetch.
+	const [uploadedAvatar, setUploadedAvatar] = useState<string | null>(null);
 
 	if (loading) {
-		return <p className="mt-6 text-sm text-muted-foreground">Loading profile…</p>;
-	}
-
-	if (error || !data) {
 		return (
-			<div className="mt-6 text-sm">
-				<p className="text-error-500">{error ?? "Could not load profile."}</p>
-				<button onClick={refetch} className="mt-2 font-medium underline">
-					Try again
-				</button>
+			<div className="w-full space-y-6">
+				<PageHeader title="My Account" />
+				<div className="h-56 animate-pulse rounded-[20px] bg-primary-light" />
 			</div>
 		);
 	}
 
-	const rows: { label: string; value: string }[] = [
-		{ label: "Full Name", value: data.name },
-		{ label: "Tag", value: data.tag_name ? `@${data.tag_name}` : "—" },
+	if (error || !data) {
+		return (
+			<div className="w-full space-y-6">
+				<PageHeader title="My Account" />
+				<div className="rounded-[20px] bg-[#f8f8f8] p-6 text-sm">
+					<p className="text-error-500">{error ?? "Could not load profile."}</p>
+					<button onClick={refetch} className="mt-2 font-medium underline">
+						Try again
+					</button>
+				</div>
+			</div>
+		);
+	}
+
+	const avatar = uploadedAvatar ?? data.avatar_url;
+
+	const details: { label: string; value: string }[] = [
 		{ label: "Email", value: data.email },
-		{ label: "Date of Birth", value: data.date_of_birth ?? "—" },
-		{ label: "Gender", value: data.gender ?? "—" },
-		{ label: "Address", value: data.address ?? "—" },
-		{
-			label: "Wallet",
-			value: data.stellar_address ?? "Not linked",
-		},
+		{ label: "Date of Birth", value: formatDate(data.date_of_birth) },
+		{ label: "Gender", value: data.gender ? labelize(data.gender) : "Not set" },
+		{ label: "Address", value: data.address ?? "Not set" },
 		{
 			label: "Sign-in",
-			value: data.is_google_linked ? "Google" : "Email & password",
+			value: data.is_google_linked
+				? data.has_password
+					? "Google & password"
+					: "Google"
+				: "Email & password",
 		},
 	];
 
 	return (
-		<div>
-			<h2 className="text-xl font-light md:text-3xl md:font-normal">Profile</h2>
+		<div className="w-full space-y-6 pb-10 md:space-y-8">
+			<PageHeader title="My Account" />
 
-			<div className="mt-5 flex items-center gap-4">
-				<ImageUpload
-					variant="avatar"
-					src={assetUrl(avatar)}
-					placeholder={AVATAR_PLACEHOLDER}
-					alt={data.name}
-					onUpload={async (file) => {
-						const { avatar_url } = await profileApi.uploadAvatar(file);
-						setAvatar(avatar_url);
-						return assetUrl(avatar_url);
-					}}
-				/>
-				<div>
-					<p className="text-lg font-medium">{data.name}</p>
-					{data.tag_name && (
-						<p className="text-sm text-muted-foreground">@{data.tag_name}</p>
-					)}
+			<div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+				<div className="space-y-4">
+					{/* Identity */}
+					<section className="relative overflow-hidden rounded-[20px] bg-primary px-6 py-7 text-white md:px-8">
+						<img
+							src="/images/wallet-vector.svg"
+							alt=""
+							aria-hidden
+							className="pointer-events-none absolute -bottom-6 -right-6 opacity-70"
+						/>
+						<div className="relative flex items-center gap-4">
+							<ImageUpload
+								variant="avatar"
+								src={assetUrl(avatar)}
+								placeholder={
+									<span className="flex h-full w-full items-center justify-center bg-white text-xl font-medium text-primary">
+										{initials(data.name)}
+									</span>
+								}
+								alt={data.name}
+								onUpload={async (file) => {
+									const { avatar_url } = await profileApi.uploadAvatar(file);
+									setUploadedAvatar(avatar_url);
+									return assetUrl(avatar_url);
+								}}
+							/>
+							<div className="min-w-0">
+								<p className="truncate text-xl md:text-2xl">{data.name}</p>
+								{data.tag_name && (
+									<p className="text-sm text-white/80">@{data.tag_name}</p>
+								)}
+							</div>
+						</div>
+
+						<div className="relative mt-6 flex flex-wrap items-center gap-2 text-xs">
+							{data.stellar_address ? (
+								<span className="rounded-full bg-primary-dark px-3 py-1.5">
+									Wallet linked · {shortAddress(data.stellar_address)}
+								</span>
+							) : (
+								<Link
+									href={pageRoutes.dashboardRoutes.WALLET}
+									className="rounded-full bg-white px-3 py-1.5 text-primary"
+								>
+									Link a wallet
+								</Link>
+							)}
+						</div>
+					</section>
+
+					{/* Details */}
+					<section className="rounded-[20px] bg-[#f8f8f8] px-6 py-2">
+						{details.map((row) => (
+							<div
+								key={row.label}
+								className="flex items-start justify-between gap-4 border-b border-neutral-light py-3.5 last:border-0"
+							>
+								<span className="text-sm font-light">{row.label}</span>
+								<span className="break-all text-right text-sm">{row.value}</span>
+							</div>
+						))}
+					</section>
 				</div>
-			</div>
 
-			<div className="mt-6 space-y-3">
-				{rows.map((r) => (
-					<div
-						key={r.label}
-						className="flex justify-between gap-4 border-b border-b-[#d9d9d9] pb-2"
+				{/* Settings */}
+				<section className="space-y-3">
+					{MENU.map(({ label, description, href, Icon }) => (
+						<Link
+							key={href}
+							href={href}
+							className="flex items-center gap-4 rounded-[20px] bg-[#f8f8f8] px-5 py-4 transition hover:bg-[#f2f2f2] md:px-6 md:py-5"
+						>
+							<span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-light text-xl text-primary">
+								<Icon />
+							</span>
+							<span className="min-w-0 flex-1">
+								<span className="block text-sm md:text-base">{label}</span>
+								<span className="block truncate text-xs font-light">{description}</span>
+							</span>
+							<HiChevronRight className="shrink-0 text-xl text-neutral-900" />
+						</Link>
+					))}
+
+					<button
+						type="button"
+						onClick={logout}
+						disabled={loggingOut}
+						className="flex w-full items-center gap-4 rounded-[20px] bg-[#f8f8f8] px-5 py-4 text-left transition hover:bg-accent-light disabled:opacity-60 md:px-6 md:py-5"
 					>
-						<span className="text-sm font-light md:text-base">{r.label}</span>
-						<span className="break-all text-right text-sm font-medium md:text-base">
-							{r.value}
+						<span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-light text-xl text-accent">
+							<HiOutlineArrowRightOnRectangle />
 						</span>
-					</div>
-				))}
-			</div>
-
-			{/* Settings sub-pages */}
-			<div className="mt-8 space-y-3">
-				{[
-					{ label: "Edit Personal Info", href: pageRoutes.dashboardRoutes.PROFILE_EDIT },
-					{ label: "Password & Security", href: pageRoutes.dashboardRoutes.PROFILE_SECURITY },
-					{ label: "Withdraw Destinations", href: pageRoutes.dashboardRoutes.WITHDRAW_INFO },
-				].map((item) => (
-					<Link
-						key={item.href}
-						href={item.href}
-						className="flex items-center justify-between rounded-2xl bg-[#f7f7f7] px-4 py-4 transition-colors hover:bg-[#f0f0f0] md:px-6"
-					>
-						<span className="text-sm font-medium md:text-base">{item.label}</span>
-						<HiChevronRight className="text-xl text-muted-foreground" />
-					</Link>
-				))}
-
-				<button
-					type="button"
-					onClick={logout}
-					disabled={loggingOut}
-					className="flex w-full items-center justify-between rounded-2xl bg-[#f7f7f7] px-4 py-4 text-left transition-colors hover:bg-[#f0f0f0] disabled:opacity-60 md:px-6"
-				>
-					<span className="text-sm font-medium text-error-500 md:text-base">
-						{loggingOut ? "Signing out…" : "Log Out"}
-					</span>
-					<HiChevronRight className="text-xl text-error-500" />
-				</button>
+						<span className="flex-1 text-sm text-accent md:text-base">
+							{loggingOut ? "Signing out…" : "Log Out"}
+						</span>
+					</button>
+				</section>
 			</div>
 		</div>
 	);
+}
+
+function formatDate(iso: string | null): string {
+	if (!iso) return "Not set";
+	// A bare date ("1994-03-12") parses as UTC midnight — format it in UTC so a
+	// negative timezone doesn't show the day before.
+	const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+	return Number.isNaN(date.getTime())
+		? iso
+		: date.toLocaleDateString(undefined, {
+				day: "numeric",
+				month: "long",
+				year: "numeric",
+				timeZone: "UTC",
+			});
 }

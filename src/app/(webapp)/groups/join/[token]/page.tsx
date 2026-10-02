@@ -15,7 +15,7 @@ import { labelize } from "@/features/group/group-view";
 import { pageRoutes } from "@/config/routes";
 import { toast } from "@/lib/utils/toast";
 
-const BANNER_PLACEHOLDER = "/images/group-test-img.png";
+const BANNER_PLACEHOLDER = "/images/group-placeholder.png";
 
 const formatCurrency = (value: string | null) => {
 	const n = Number(value ?? 0);

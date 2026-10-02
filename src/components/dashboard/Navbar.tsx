@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
 import { HiOutlinePlusSmall } from "react-icons/hi2";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,8 +8,7 @@ import { Button } from "../ui/button";
 import { pageRoutes } from "../../config/routes";
 import { useApi } from "../../lib/hooks/useApi";
 import { profile as profileApi, assetUrl } from "../../lib/api";
-
-const AVATAR_PLACEHOLDER = "/images/user.jpg";
+import Avatar from "../shared/Avatar";
 
 /**
  * A nav item is active when the path IS the item, or is nested UNDER it — but
@@ -72,13 +70,12 @@ export default function Navbar() {
 							href={pageRoutes.dashboardRoutes.ME}
 							className="flex items-center bg-[#f8f8f8] w-full py-[8.5px] px-3.5 rounded-[8.5px] gap-[8.3px]"
 						>
-							<div className="h-12.75 w-12.75 rounded-full overflow-hidden bg-primary items-center justify-center">
-								<img
-									className="h-full w-full object-cover"
-									src={assetUrl(me?.avatar_url, AVATAR_PLACEHOLDER)}
-									alt={me?.name ?? "User Profile Picture"}
-								/>
-							</div>
+							<Avatar
+								src={assetUrl(me?.avatar_url)}
+								name={me?.name}
+								className="h-12.75 w-12.75"
+								textClassName="text-base"
+							/>
 
 							<div className="">
 								<h4 className="font-medium">{me?.name ?? "—"}</h4>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import {
 	HiOutlineCheck,
 	HiOutlineExclamationTriangle,
@@ -332,12 +333,12 @@ export default function WithdrawPage() {
 
 	// ---- Form ----
 	return (
-		<div className="mx-auto max-w-2xl pb-10">
-			<GoBack />
-			<h2 className="mt-4 text-lg font-medium md:text-2xl">Withdraw</h2>
-			<p className="mt-1 text-sm font-light text-muted-foreground">
-				Your payout goes straight from the circle to the address you choose.
-			</p>
+		<div className="w-full max-w-2xl pb-10">
+			<PageHeader
+				title="Withdraw"
+				subtitle="Your payout goes straight from the circle to the address you choose."
+				back
+			/>
 
 			{loading ? (
 				<p className="mt-6 text-sm text-muted-foreground">Loading…</p>

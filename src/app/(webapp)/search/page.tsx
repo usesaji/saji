@@ -1,10 +1,10 @@
 "use client";
 
 import { Suspense, useCallback } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { IoIosArrowRoundForward } from "react-icons/io";
-import GoBack from "@/components/dashboard/GoBack";
 import { useApi } from "@/lib/hooks/useApi";
 import {
 	groups as groupsApi,
@@ -40,11 +40,8 @@ function SearchResults() {
 		!loading && mine.length === 0 && txns.length === 0;
 
 	return (
-		<div className="mx-auto max-w-3xl pb-10">
-			<GoBack />
-			<h2 className="mt-4 text-xl font-medium md:text-2xl">
-				Results for “{q}”
-			</h2>
+		<div className="w-full max-w-4xl pb-10">
+			<PageHeader title={q ? `Results for “${q}”` : "Search"} back />
 
 			{loading && (
 				<p className="mt-6 text-sm text-muted-foreground">Searching…</p>

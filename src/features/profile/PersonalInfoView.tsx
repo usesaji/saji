@@ -1,166 +1,143 @@
 "use client";
+
 import React, { useState } from "react";
-import GoBack from "../../components/dashboard/GoBack";
+import PageHeader from "../../components/dashboard/PageHeader";
 import { toast } from "../../lib/utils/toast";
-import EditFieldSheet from "./EditFieldSheet";
+import { useApi } from "../../lib/hooks/useApi";
+import { ApiError, profile as profileApi, type ProfileDetails } from "../../lib/api";
+import { pageRoutes } from "../../config/routes";
+import { labelize } from "../group/group-view";
+import EditFieldSheet, { type EditingField } from "./EditFieldSheet";
 import PersonalInfoRow from "./PersonalInfoRow";
 
-interface PersonalInfoFields {
-	fullName: string;
-	email: string;
-	personalTag: string;
-	dateOfBirth: string;
-	gender: string;
-	address: string;
-}
+/** The editable profile fields, keyed by their API names. */
+type FieldKey = "name" | "tag_name" | "date_of_birth" | "gender" | "address";
 
-interface EditingField {
-	key: keyof PersonalInfoFields;
-	label: string;
-	inputType: string;
-	value: string;
-}
+const GENDERS = [
+	{ value: "female", label: "Female" },
+	{ value: "male", label: "Male" },
+	{ value: "other", label: "Other" },
+	{ value: "prefer_not_to_say", label: "Prefer not to say" },
+];
 
-const FIELD_LABELS: Record<keyof PersonalInfoFields, string> = {
-	fullName: "Full Name",
-	email: "Email Address",
-	personalTag: "Personal Tag",
-	dateOfBirth: "Date Of Birth",
-	gender: "Gender",
-	address: "Address",
+const FIELDS: Record<FieldKey, Omit<EditingField, "key" | "value"> & { required?: boolean }> = {
+	name: { label: "Full Name", inputType: "text", required: true },
+	tag_name: { label: "Personal Tag", inputType: "text", required: true },
+	date_of_birth: { label: "Date of Birth", inputType: "date" },
+	gender: { label: "Gender", inputType: "select", options: GENDERS },
+	address: { label: "Address", inputType: "text" },
 };
 
-const RESERVED_TAGS = ["admin", "test", "support", "saji"];
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateTag(raw: string): string | null {
-	const normalized = raw.replace(/^@/, "").trim().toLowerCase();
-	if (!normalized) return "Personal tag can't be empty.";
-	if (normalized.includes(" ")) return "Oops, this tag has already been taken.";
-	if (RESERVED_TAGS.includes(normalized)) return "Oops, this tag has already been taken.";
-	return null;
+/** How a stored value reads in its row. */
+function display(key: FieldKey | "email", profile: ProfileDetails): string | null {
+	switch (key) {
+		case "tag_name":
+			return profile.tag_name ? `@${profile.tag_name}` : null;
+		case "gender":
+			return profile.gender ? labelize(profile.gender) : null;
+		case "date_of_birth":
+			return profile.date_of_birth
+				? new Date(`${profile.date_of_birth.slice(0, 10)}T00:00:00Z`).toLocaleDateString(
+						undefined,
+						{ day: "numeric", month: "long", year: "numeric", timeZone: "UTC" },
+					)
+				: null;
+		default:
+			return profile[key] || null;
+	}
 }
 
+/**
+ * Personal Info: one row per field, each edited in its own sheet and saved
+ * straight to `PATCH /api/profile`.
+ */
 export default function PersonalInfoView() {
-	const [fields, setFields] = useState<PersonalInfoFields>({
-		fullName: "Dean Joseph Ogude",
-		email: "deaostudios@gmail.com",
-		personalTag: "deanogude",
-		dateOfBirth: "",
-		gender: "",
-		address: "",
-	});
-	const [editingField, setEditingField] = useState<EditingField | null>(null);
+	const { data, loading, error, refetch } = useApi(() => profileApi.show(), []);
+	/** Latest saved profile — the PATCH response, without waiting on a refetch. */
+	const [saved, setSaved] = useState<Partial<ProfileDetails>>({});
+	const [editing, setEditing] = useState<EditingField | null>(null);
 
-	const profileInfoRows: { key: keyof PersonalInfoFields; inputType: string }[] = [
-		{ key: "fullName", inputType: "text" },
-		{ key: "email", inputType: "email" },
-		{ key: "personalTag", inputType: "text" },
-	];
+	const profile = data ? ({ ...data, ...saved } as ProfileDetails) : null;
 
-	const additionalInfoRows: { key: keyof PersonalInfoFields; inputType: string }[] = [
-		{ key: "dateOfBirth", inputType: "date" },
-		{ key: "gender", inputType: "text" },
-		{ key: "address", inputType: "text" },
-	];
+	const edit = (key: FieldKey) => {
+		if (!profile) return;
+		const raw = profile[key] ?? "";
+		setEditing({
+			key,
+			...FIELDS[key],
+			value: key === "date_of_birth" ? String(raw).slice(0, 10) : String(raw),
+		});
+	};
 
-	const handleSaveField = async (fieldKey: string, rawValue: string) => {
-		const key = fieldKey as keyof PersonalInfoFields;
-		const trimmed = rawValue.trim();
+	/** Returns an error message for the sheet, or null once saved. */
+	const save = async (fieldKey: string, value: string): Promise<string | null> => {
+		const key = fieldKey as FieldKey;
+		const field = FIELDS[key];
+		const cleaned = key === "tag_name" ? value.replace(/^@/, "").trim() : value.trim();
 
-		if (!trimmed) return "This field can't be empty.";
-		if (key === "personalTag") {
-			const tagError = validateTag(trimmed);
-			if (tagError) return tagError;
-		}
-		if (key === "email" && !EMAIL_REGEX.test(trimmed)) {
-			return "Enter a valid email address.";
-		}
+		if (field.required && !cleaned) return `${field.label} can't be empty.`;
+		if (key === "tag_name" && /\s/.test(cleaned)) return "Tags can't contain spaces.";
 
-		await new Promise((resolve) => setTimeout(resolve, 900));
-
-		if (Math.random() < 0.2) {
-			setEditingField(null);
-			toast.error(
-				"Network is currently unstable, give it a moment and try again.",
-				"Network Error",
-			);
+		try {
+			const updated = await profileApi.update({
+				// Optional fields clear to null; the API reads an omitted key as
+				// "leave it alone", so an empty value has to be sent explicitly.
+				[key]: cleaned || null,
+			} as Parameters<typeof profileApi.update>[0]);
+			setSaved((s) => ({ ...s, ...(updated as Partial<ProfileDetails>) }));
+			setEditing(null);
+			toast.success(`Your ${field.label.toLowerCase()} has been updated.`, "Changes saved");
 			return null;
+		} catch (err) {
+			if (err instanceof ApiError) {
+				return err.errors?.[key]?.[0] ?? err.message;
+			}
+			return "Something went wrong. Try again.";
 		}
-
-		const normalized = key === "personalTag" ? trimmed.replace(/^@/, "").toLowerCase() : trimmed;
-		setFields((prev) => ({ ...prev, [key]: normalized }));
-		setEditingField(null);
-		toast.success(
-			`Your ${FIELD_LABELS[key].toLowerCase()} has been successfully updated`,
-			"Changes Saved",
-		);
-		return null;
 	};
 
 	return (
-		<div className="mx-auto md:max-w-xl lg:max-w-2xl w-full px-0 sm:px-4 py-2">
-			<div className="space-y-6">
-				<GoBack />
+		<div className="w-full max-w-2xl space-y-6 pb-10">
+			<PageHeader title="Personal Info" back backHref={pageRoutes.dashboardRoutes.ME} />
 
-				<h2 className="text-xl font-semibold text-neutral-dark">Personal Info</h2>
+			{loading && <div className="h-80 animate-pulse rounded-[20px] bg-[#f8f8f8]" />}
 
-				<div>
-					<h4 className="text-xs font-light text-neutral-light-active border-b border-neutral-light pb-2.5">
-						Profile Info
-					</h4>
-					<div className="divide-y divide-neutral-light">
-						{profileInfoRows.map((row) => (
-							<PersonalInfoRow
-								key={row.key}
-								label={FIELD_LABELS[row.key]}
-								value={
-									row.key === "personalTag" && fields.personalTag
-										? `@ ${fields.personalTag}`
-										: fields[row.key] || null
-								}
-								onEdit={() =>
-									setEditingField({
-										key: row.key,
-										label: FIELD_LABELS[row.key],
-										inputType: row.inputType,
-										value: fields[row.key],
-									})
-								}
-							/>
-						))}
-					</div>
+			{error && !loading && (
+				<div className="rounded-[20px] bg-[#f8f8f8] p-6 text-sm">
+					<p className="text-error-500">{error}</p>
+					<button onClick={refetch} className="mt-2 font-medium underline">
+						Try again
+					</button>
 				</div>
+			)}
 
-				<div>
-					<h4 className="text-xs font-light text-neutral-light-active border-b border-neutral-light pb-2.5">
-						Additional Info
-					</h4>
-					<div className="divide-y divide-neutral-light">
-						{additionalInfoRows.map((row) => (
-							<PersonalInfoRow
-								key={row.key}
-								label={FIELD_LABELS[row.key]}
-								value={fields[row.key] || null}
-								onEdit={() =>
-									setEditingField({
-										key: row.key,
-										label: FIELD_LABELS[row.key],
-										inputType: row.inputType,
-										value: fields[row.key],
-									})
-								}
-							/>
-						))}
-					</div>
-				</div>
-			</div>
+			{profile && !loading && (
+				<>
+					<Group title="Profile Info">
+						<PersonalInfoRow label="Full Name" value={display("name", profile)} onEdit={() => edit("name")} />
+						{/* No endpoint changes the sign-in email, so it isn't editable. */}
+						<PersonalInfoRow label="Email Address" value={display("email", profile)} />
+						<PersonalInfoRow label="Personal Tag" value={display("tag_name", profile)} onEdit={() => edit("tag_name")} />
+					</Group>
 
-			<EditFieldSheet
-				field={editingField}
-				onDiscard={() => setEditingField(null)}
-				onSave={handleSaveField}
-			/>
+					<Group title="Additional Info">
+						<PersonalInfoRow label="Date of Birth" value={display("date_of_birth", profile)} onEdit={() => edit("date_of_birth")} />
+						<PersonalInfoRow label="Gender" value={display("gender", profile)} onEdit={() => edit("gender")} />
+						<PersonalInfoRow label="Address" value={display("address", profile)} onEdit={() => edit("address")} />
+					</Group>
+				</>
+			)}
+
+			<EditFieldSheet field={editing} onDiscard={() => setEditing(null)} onSave={save} />
 		</div>
+	);
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+	return (
+		<section className="rounded-[20px] bg-[#f8f8f8] px-6 pb-1 pt-4">
+			<h3 className="border-b border-neutral-light pb-2.5 text-xs font-light">{title}</h3>
+			<div className="divide-y divide-neutral-light">{children}</div>
+		</section>
 	);
 }

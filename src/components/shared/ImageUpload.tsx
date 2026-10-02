@@ -9,8 +9,11 @@ import { ApiError } from "../../lib/api";
 type ImageUploadProps = {
 	/** Current image URL (already resolved via assetUrl), or "" for none. */
 	src: string;
-	/** Placeholder shown when there's no uploaded image. */
-	placeholder: string;
+	/**
+	 * Shown when there's no uploaded image: an image URL, or an element (e.g.
+	 * the person's initials).
+	 */
+	placeholder: string | React.ReactNode;
 	/** Uploads the chosen file and resolves to the new stored URL. */
 	onUpload: (file: File) => Promise<string>;
 	/** "avatar" = circle, "banner" = wide rounded rectangle. */
@@ -42,7 +45,7 @@ export default function ImageUpload({
 	const [preview, setPreview] = useState<string | null>(null);
 	const [uploading, setUploading] = useState(false);
 
-	const shown = preview ?? (src || placeholder);
+	const shown = preview ?? (src || (typeof placeholder === "string" ? placeholder : ""));
 
 	const pick = () => inputRef.current?.click();
 
@@ -89,7 +92,7 @@ export default function ImageUpload({
 
 	return (
 		<div className={`relative overflow-hidden ${shape} ${className}`}>
-			<img src={shown} alt={alt} className="h-full w-full object-cover" />
+			{shown ? <img src={shown} alt={alt} className="h-full w-full object-cover" /> : placeholder}
 
 			{editable && (
 				<button

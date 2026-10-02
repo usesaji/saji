@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import GoBack from "@/components/dashboard/GoBack";
+import { useState } from "react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import InputField from "@/components/ui/custom/InputField";
-import { Button } from "@/components/ui/button";
+import SecurityToggleRow from "@/features/profile/SecurityToggleRow";
+import SecurityInfoBanner from "@/features/profile/SecurityInfoBanner";
 import { useApi } from "@/lib/hooks/useApi";
 import { profile as profileApi, fieldErrors, ApiError } from "@/lib/api";
+import { pageRoutes } from "@/config/routes";
 import { toast } from "@/lib/utils/toast";
 
-/** Password & Security — change password and manage security toggles. */
+/** The lockout threshold the toggle switches on; 0 turns lockout off. */
+const DEFAULT_LOCK_AFTER = 5;
+
+/** Password & Security — change password and manage security settings. */
 export default function SecurityPage() {
 	const { data } = useApi(() => profileApi.show(), []);
 
@@ -21,10 +26,20 @@ export default function SecurityPage() {
 	const [pwdErrors, setPwdErrors] = useState<Record<string, string>>({});
 	const [savingPwd, setSavingPwd] = useState(false);
 
+	// Google-only accounts have no password yet, so there's no current one to ask for.
 	const hasPassword = data?.has_password ?? true;
+	const canSubmit =
+		pwd.password.length >= 8 &&
+		pwd.password === pwd.password_confirmation &&
+		(!hasPassword || pwd.current_password.length > 0);
 
 	const setP = (key: keyof typeof pwd) => (e: React.ChangeEvent<HTMLInputElement>) =>
 		setPwd((p) => ({ ...p, [key]: e.target.value }));
+
+	const mismatch =
+		pwd.password_confirmation.length > 0 && pwd.password !== pwd.password_confirmation
+			? "The passwords don't match."
+			: undefined;
 
 	const submitPwd = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -49,126 +64,108 @@ export default function SecurityPage() {
 		}
 	};
 
-	// --- Security toggles ---
-	const [twofa, setTwofa] = useState(false);
-	const [lockAfter, setLockAfter] = useState(0);
-	const [savingSec, setSavingSec] = useState(false);
+	// --- Security settings ---
+	// What the user last set on this screen, over what the profile says.
+	const [settings, setSettings] = useState<{ twofa: boolean; lockAfter: number } | null>(null);
+	const twofa = settings?.twofa ?? data?.security.twofa_on_suspicious_withdrawal ?? false;
+	const lockAfter = settings?.lockAfter ?? data?.security.lock_after_failed_attempts ?? 0;
 
-	useEffect(() => {
-		if (!data) return;
-		setTwofa(data.security.twofa_on_suspicious_withdrawal);
-		setLockAfter(data.security.lock_after_failed_attempts);
-	}, [data]);
-
-	const submitSecurity = async (nextTwofa: boolean, nextLock: number) => {
-		setSavingSec(true);
+	/** Optimistic: flip the switch now, put it back if the save fails. */
+	const saveSecurity = async (next: { twofa: boolean; lockAfter: number }) => {
+		const previous = settings;
+		setSettings(next);
 		try {
 			await profileApi.updateSecurity({
-				twofa_on_suspicious_withdrawal: nextTwofa,
-				lock_after_failed_attempts: nextLock,
+				twofa_on_suspicious_withdrawal: next.twofa,
+				lock_after_failed_attempts: next.lockAfter,
 			});
-			setTwofa(nextTwofa);
-			setLockAfter(nextLock);
 			toast.success("", "Security updated");
 		} catch (err) {
+			setSettings(previous);
 			toast.error(
 				err instanceof ApiError ? err.message : "Something went wrong.",
 				"Could not update",
 			);
-		} finally {
-			setSavingSec(false);
 		}
 	};
 
 	return (
-		<div>
-			<GoBack />
-			<h2 className="mt-4 text-xl font-light md:text-3xl md:font-normal">
-				Password & Security
-			</h2>
+		<div className="w-full space-y-6 pb-10 md:space-y-8">
+			<PageHeader title="Password & Security" back backHref={pageRoutes.dashboardRoutes.ME} />
 
-			{/* Change password */}
-			<form onSubmit={submitPwd} className="mt-6 max-w-lg space-y-5">
-				<h3 className="md:text-xl">
-					{hasPassword ? "Change Password" : "Set a Password"}
-				</h3>
+			<div className="grid items-start gap-6 lg:grid-cols-2">
+				<form onSubmit={submitPwd} className="space-y-5 rounded-[20px] bg-[#f8f8f8] p-6 md:p-7">
+					<h3 className="text-lg md:text-xl">
+						{hasPassword ? "Change Password" : "Set a Password"}
+					</h3>
+					{!hasPassword && (
+						<p className="-mt-3 text-xs font-light">
+							You sign in with Google. Set a password to sign in with your email too.
+						</p>
+					)}
 
-				{hasPassword && (
+					{hasPassword && (
+						<InputField
+							name="current_password"
+							label="Current Password"
+							type="password"
+							value={pwd.current_password}
+							onChange={setP("current_password")}
+							error={pwdErrors.current_password}
+						/>
+					)}
 					<InputField
-						name="current_password"
-						label="Current Password"
+						name="password"
+						label="New Password"
 						type="password"
-						value={pwd.current_password}
-						onChange={setP("current_password")}
-						error={pwdErrors.current_password}
+						description="At least 8 characters."
+						value={pwd.password}
+						onChange={setP("password")}
+						error={pwdErrors.password}
 					/>
-				)}
-				<InputField
-					name="password"
-					label="New Password"
-					type="password"
-					value={pwd.password}
-					onChange={setP("password")}
-					error={pwdErrors.password}
-				/>
-				<InputField
-					name="password_confirmation"
-					label="Confirm New Password"
-					type="password"
-					value={pwd.password_confirmation}
-					onChange={setP("password_confirmation")}
-					error={pwdErrors.password}
-				/>
+					<InputField
+						name="password_confirmation"
+						label="Confirm New Password"
+						type="password"
+						value={pwd.password_confirmation}
+						onChange={setP("password_confirmation")}
+						error={mismatch}
+					/>
 
-				<Button type="submit" isLoading={savingPwd} className="w-full">
-					{hasPassword ? "Update Password" : "Set Password"}
-				</Button>
-			</form>
-
-			{/* Security toggles */}
-			<section className="mt-10 max-w-lg space-y-4">
-				<h3 className="md:text-xl">Security Settings</h3>
-
-				<div className="flex items-center justify-between gap-4 rounded-2xl bg-[#f7f7f7] p-4 md:p-6">
-					<div>
-						<p className="text-sm font-medium md:text-base">
-							2FA on suspicious withdrawal
-						</p>
-						<p className="text-xs font-light text-muted-foreground">
-							Require an extra check for unusual withdrawals.
-						</p>
-					</div>
-					<Button
-						variant={twofa ? "default" : "outline"}
-						size="sm"
-						isLoading={savingSec}
-						onClick={() => submitSecurity(!twofa, lockAfter)}
+					<button
+						type="submit"
+						disabled={!canSubmit || savingPwd}
+						className="h-12 w-full rounded-full bg-primary-dark text-sm text-white transition hover:bg-primary-dark-hover disabled:cursor-not-allowed disabled:bg-neutral-light-hover disabled:text-neutral-light-active md:text-base"
 					>
-						{twofa ? "On" : "Off"}
-					</Button>
-				</div>
+						{savingPwd ? "Saving…" : hasPassword ? "Update Password" : "Set Password"}
+					</button>
+				</form>
 
-				<div className="flex items-center justify-between gap-4 rounded-2xl bg-[#f7f7f7] p-4 md:p-6">
-					<div>
-						<p className="text-sm font-medium md:text-base">
-							Lock after failed logins
-						</p>
-						<p className="text-xs font-light text-muted-foreground">
-							{lockAfter > 0
-								? `Locks after ${lockAfter} failed attempts.`
-								: "Lockout disabled."}
-						</p>
-					</div>
-					<Button
-						variant={lockAfter > 0 ? "default" : "outline"}
-						size="sm"
-						isLoading={savingSec}
-						onClick={() => submitSecurity(twofa, lockAfter > 0 ? 0 : 5)}
-					>
-						{lockAfter > 0 ? "Disable" : "Enable (5)"}
-					</Button>
+				<div className="space-y-4">
+					<section className="rounded-[20px] bg-[#f8f8f8] px-6 py-2 md:px-7">
+						<h3 className="pt-4 text-lg md:text-xl">Security Settings</h3>
+						<SecurityToggleRow
+							label="2FA on suspicious withdrawal"
+							description="Ask for an extra check before an unusual withdrawal."
+							checked={twofa}
+							onChange={(on) => saveSecurity({ twofa: on, lockAfter })}
+						/>
+						<SecurityToggleRow
+							label="Lock after failed logins"
+							description={
+								lockAfter > 0
+									? `Your account locks for 15 minutes after ${lockAfter} wrong passwords.`
+									: "Turn on to lock your account after repeated wrong passwords."
+							}
+							checked={lockAfter > 0}
+							onChange={(on) =>
+								saveSecurity({ twofa, lockAfter: on ? DEFAULT_LOCK_AFTER : 0 })
+							}
+						/>
+					</section>
+					<SecurityInfoBanner />
 				</div>
-			</section>
+			</div>
 		</div>
 	);
 }

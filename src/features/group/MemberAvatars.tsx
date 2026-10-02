@@ -16,13 +16,23 @@ export default function MemberAvatars({
 	members,
 	total,
 	size = "md",
+	borderClassName = "border-white",
+	overflowClassName = "bg-neutral-900 text-white",
 }: {
 	members: { name: string; avatar_url: string | null }[];
 	/** Full member count, which is usually larger than `members.length`. */
 	total: number;
-	size?: "sm" | "md";
+	size?: "sm" | "md" | "lg";
+	/** Ring around each face, so the stack reads on any background. */
+	borderClassName?: string;
+	/** Colours of the "+N" bubble. */
+	overflowClassName?: string;
 }) {
-	const box = size === "sm" ? "h-4 w-4 text-[7px]" : "h-8.5 w-8.5 text-xs";
+	const box = {
+		sm: "h-4 w-4 text-[7px]",
+		md: "h-8.5 w-8.5 text-xs",
+		lg: "h-9 w-9 text-xs md:h-12 md:w-12 md:text-sm",
+	}[size];
 
 	// The payload carries a few members for the stack; the count is authoritative
 	// for the total. Never derive one from the other — that mismatch is the bug
@@ -36,7 +46,7 @@ export default function MemberAvatars({
 			{members.map((member, index) => (
 				<div
 					key={`${member.name}-${index}`}
-					className={`${box} -ml-2 first:ml-0 shrink-0 overflow-hidden rounded-full border border-white bg-[#efeaff]`}
+					className={`${box} -ml-2 first:ml-0 shrink-0 overflow-hidden rounded-full border ${borderClassName} bg-[#efeaff]`}
 					title={member.name}
 				>
 					{member.avatar_url ? (
@@ -55,7 +65,7 @@ export default function MemberAvatars({
 
 			{overflow > 0 && (
 				<div
-					className={`${box} -ml-2 shrink-0 rounded-full border border-white bg-neutral-900 text-white`}
+					className={`${box} -ml-2 shrink-0 rounded-full border ${borderClassName} ${overflowClassName}`}
 				>
 					<span className="flex h-full w-full items-center justify-center font-medium">
 						+{overflow}
