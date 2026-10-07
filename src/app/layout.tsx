@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 	],
 	authors: [{ name: "Saji" }],
 	creator: "Saji",
-	metadataBase: new URL("https://usesaji.com"), // replace with actual domain
+	metadataBase: new URL("https://usesaji.com"),
 	openGraph: {
 		type: "website",
 		locale: "en_US",
